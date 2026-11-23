@@ -1,0 +1,154 @@
+@import 'tailwindcss';
+
+/*
+ * ChatVault's own look.
+ *
+ * Deliberately not an imitation of any messaging app: the palette is a cool
+ * slate with a violet accent, and nothing here reproduces another product's
+ * marks, icons or colours (plan §2 non-goals, §5 "Distinct branding; familiar
+ * UX without copying protected assets").
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --color-ink-50: #f6f7fb;
+  --color-ink-100: #eceef6;
+  --color-ink-200: #d8dcea;
+  --color-ink-300: #b4bbd3;
+  --color-ink-400: #8a93b2;
+  --color-ink-500: #646e8f;
+  --color-ink-600: #4a5373;
+  --color-ink-700: #353d59;
+  --color-ink-800: #232a41;
+  --color-ink-900: #171d2e;
+  --color-ink-950: #0e1220;
+
+  --color-accent-100: #e9e6ff;
+  --color-accent-200: #cdc5ff;
+  --color-accent-300: #a899ff;
+  --color-accent-400: #8a74fb;
+  --color-accent-500: #6d55ef;
+  --color-accent-600: #5940d2;
+  --color-accent-700: #4832a6;
+
+  --color-warn-100: #fff2d9;
+  --color-warn-300: #f7c768;
+  --color-warn-500: #d9941a;
+  --color-warn-700: #8a5a0a;
+
+  --color-danger-100: #ffe6e6;
+  --color-danger-400: #f06a6a;
+  --color-danger-500: #d93b3b;
+  --color-danger-700: #8f2222;
+
+  --color-good-100: #dcf6ea;
+  --color-good-400: #3fc38a;
+  --color-good-500: #1f9e6b;
+  --color-good-700: #0f6244;
+
+  --radius-card: 0.875rem;
+}
+
+:root {
+  color-scheme: light dark;
+  --surface: var(--color-ink-50);
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--color-ink-100);
+  --border: var(--color-ink-200);
+  --text: var(--color-ink-900);
+  --text-muted: var(--color-ink-500);
+  --bubble-them: #ffffff;
+  --bubble-me: var(--color-accent-100);
+}
+
+[data-theme='dark'] {
+  --surface: var(--color-ink-950);
+  --surface-raised: var(--color-ink-900);
+  --surface-sunken: #0a0d18;
+  --border: var(--color-ink-800);
+  --text: var(--color-ink-100);
+  --text-muted: var(--color-ink-400);
+  --bubble-them: var(--color-ink-800);
+  --bubble-me: #2a2060;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --surface: var(--color-ink-950);
+    --surface-raised: var(--color-ink-900);
+    --surface-sunken: #0a0d18;
+    --border: var(--color-ink-800);
+    --text: var(--color-ink-100);
+    --text-muted: var(--color-ink-400);
+    --bubble-them: var(--color-ink-800);
+    --bubble-me: #2a2060;
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  border-color: var(--border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer utilities {
+  .surface {
+    background: var(--surface-raised);
+  }
+  .sunken {
+    background: var(--surface-sunken);
+  }
+  .muted {
+    color: var(--text-muted);
+  }
+  .hairline {
+    border-color: var(--border);
+  }
+  .bubble-them {
+    background: var(--bubble-them);
+  }
+  .bubble-me {
+    background: var(--bubble-me);
+  }
+  /* Long chats: let the browser skip work for off-screen days. */
+  .day-section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+  }
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

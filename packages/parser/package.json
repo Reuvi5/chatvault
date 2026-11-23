@@ -1,0 +1,15 @@
+{
+  "name": "@chatvault/parser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-only parser for exported chat transcripts and archives, with canonicalisation, merge and gap detection.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@chatvault/protocol": "*",
+    "fflate": "^0.8.3"
+  }
+}

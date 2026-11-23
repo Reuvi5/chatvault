@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "jsx": "preserve",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "verbatimModuleSyntax": false,
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@chatvault/protocol": ["packages/protocol/src/index.ts"],
+      "@chatvault/protocol/*": ["packages/protocol/src/*"],
+      "@chatvault/crypto": ["packages/crypto/src/index.ts"],
+      "@chatvault/crypto/*": ["packages/crypto/src/*"],
+      "@chatvault/parser": ["packages/parser/src/index.ts"],
+      "@chatvault/parser/*": ["packages/parser/src/*"],
+      "@chatvault/client": ["packages/client/src/index.ts"],
+      "@chatvault/client/*": ["packages/client/src/*"],
+      "@/*": ["apps/web/src/*"]
+    },
+    "plugins": [{ "name": "next" }]
+  },
+  "include": [
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "apps/web/**/*.ts",
+    "apps/web/**/*.tsx",
+    "apps/web/.next/types/**/*.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": ["node_modules", "**/node_modules", "**/.next", "**/dist", ".data"]
+}

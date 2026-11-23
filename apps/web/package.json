@@ -1,0 +1,33 @@
+{
+  "name": "@chatvault/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1171.0",
+    "@aws-sdk/s3-request-presigner": "^3.1171.0",
+    "@chatvault/client": "*",
+    "@chatvault/crypto": "*",
+    "@chatvault/parser": "*",
+    "@chatvault/protocol": "*",
+    "hash-wasm": "^4.13.0",
+    "next": "^16.4.6",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "stripe": "^23.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/pg": "^8.15.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.5"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@chatvault/protocol": ["../../packages/protocol/src/index.ts"],
+      "@chatvault/protocol/*": ["../../packages/protocol/src/*"],
+      "@chatvault/crypto": ["../../packages/crypto/src/index.ts"],
+      "@chatvault/crypto/*": ["../../packages/crypto/src/*"],
+      "@chatvault/parser": ["../../packages/parser/src/index.ts"],
+      "@chatvault/parser/*": ["../../packages/parser/src/*"],
+      "@chatvault/client": ["../../packages/client/src/index.ts"],
+      "@chatvault/client/*": ["../../packages/client/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", ".next"]
+}

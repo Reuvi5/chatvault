@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+dist/
+.data/
+.tmp/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+.env*.local
+.DS_Store
+fixtures-generated/
+drill-output/

@@ -1,0 +1,16 @@
+{
+  "name": "@chatvault/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless vault client: parses, encrypts, uploads, reads back and restores archives. Shared by the web UI and the command-line drills.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@chatvault/crypto": "*",
+    "@chatvault/parser": "*",
+    "@chatvault/protocol": "*"
+  }
+}

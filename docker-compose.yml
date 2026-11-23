@@ -1,0 +1,111 @@
+# Local stand-ins for the production dependencies.
+#
+#   docker compose up -d
+#   npm run db:migrate            # once, to create the schema and the policies
+#   cp .env.example .env.local    # then uncomment the DATABASE_URL and S3 lines
+#                                 # marked "docker compose" below
+#   npm run dev
+#
+# This gives you Postgres (with an unprivileged application role, so row-level
+# security is actually exercised) and MinIO with two separate buckets and two
+# separate key pairs, standing in for Cloudflare R2 and Backblaze B2.
+#
+# You do not need any of this to run ChatVault locally: `npm run dev` on its own
+# uses a file-backed store and local directories.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chatvault
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-app-role.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d chatvault']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Primary object store, standing in for Cloudflare R2.
+  storage-primary:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: primary-key
+      MINIO_ROOT_PASSWORD: primary-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - primary-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Second, independent object store with its own credentials, standing in for
+  # Backblaze B2. Separate container, separate keys: a leaked key for one copy
+  # must not reach the other.
+  storage-secondary:
+    image: minio/minio:latest
+    command: server /data --console-address ":9003"
+    environment:
+      MINIO_ROOT_USER: secondary-key
+      MINIO_ROOT_PASSWORD: secondary-secret
+    ports:
+      - '9002:9000'
+      - '9003:9001'
+    volumes:
+      - secondary-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the two buckets, then exits.
+  create-buckets:
+    image: minio/mc:latest
+    depends_on:
+      storage-primary:
+        condition: service_healthy
+      storage-secondary:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set primary http://storage-primary:9000 primary-key primary-secret &&
+      mc mb --ignore-existing primary/chatvault-primary &&
+      mc version enable primary/chatvault-primary &&
+      mc alias set secondary http://storage-secondary:9000 secondary-key secondary-secret &&
+      mc mb --ignore-existing secondary/chatvault-backup &&
+      mc version enable secondary/chatvault-backup &&
+      echo 'Buckets ready. Object versioning is on, so an accidental delete is recoverable.'
+      "
+
+volumes:
+  postgres-data:
+  primary-data:
+  secondary-data:
+# Settings for .env.local when using docker compose:
+#
+#   DATABASE_URL=postgres://chatvault_app:app-password@localhost:5432/chatvault
+#   DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/chatvault
+#
+#   PRIMARY_DRIVER=s3
+#   PRIMARY_BUCKET=chatvault-primary
+#   PRIMARY_ENDPOINT=http://localhost:9000
+#   PRIMARY_REGION=us-east-1
+#   PRIMARY_ACCESS_KEY_ID=primary-key
+#   PRIMARY_SECRET_ACCESS_KEY=primary-secret
+#
+#   SECONDARY_DRIVER=s3
+#   SECONDARY_BUCKET=chatvault-backup
+#   SECONDARY_ENDPOINT=http://localhost:9002
+#   SECONDARY_REGION=us-east-1
+#   SECONDARY_ACCESS_KEY_ID=secondary-key
+#   SECONDARY_SECRET_ACCESS_KEY=secondary-secret

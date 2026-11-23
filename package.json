@@ -1,0 +1,36 @@
+{
+  "name": "chatvault",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Private, end-to-end encrypted archive for exported chat conversations.",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @chatvault/web",
+    "build": "npm run build --workspace @chatvault/web",
+    "start": "npm run start --workspace @chatvault/web",
+    "start:local": "CHATVAULT_UNSAFE_LOCAL_PRODUCTION=1 npm run start --workspace @chatvault/web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:migrate": "tsx apps/web/scripts/migrate.ts",
+    "db:sql": "tsx apps/web/scripts/print-sql.ts",
+    "worker": "tsx apps/web/scripts/worker.ts",
+    "fixtures": "tsx apps/web/scripts/make-fixtures.ts",
+    "drill:restore": "tsx apps/web/scripts/drill-restore.ts",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

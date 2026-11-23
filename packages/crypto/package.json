@@ -1,0 +1,15 @@
+{
+  "name": "@chatvault/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Client-side vault cryptography: Argon2id key wrapping, HKDF subkeys and streaming AES-256-GCM objects.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@chatvault/protocol": "*",
+    "hash-wasm": "^4.13.0"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@chatvault/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared types, API contracts, identifiers and pricing math.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

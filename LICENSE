@@ -1,0 +1,11 @@
+All rights reserved.
+
+Copyright (c) 2026 the ChatVault project owner.
+
+This source code was written as the implementation of a private product plan and
+no licence to use, copy, modify or distribute it has been granted. If you are the
+project owner, replace this file with the licence you actually want before
+publishing the repository or accepting outside contributions.
+
+Third-party dependencies keep their own licences; see the `node_modules`
+directory after installing, or run `npm ls --all` for the list.
