@@ -24,11 +24,7 @@ import {
   handleVerifyEmail,
 } from './handlers/auth';
 import { handleCreateVault, handleUpdateVaultBundle, handleUsage } from './handlers/vaults';
-import {
-  handleCompleteImport,
-  handleCreateImport,
-  handleImportStatus,
-} from './handlers/imports';
+import { handleCompleteImport, handleCreateImport, handleImportStatus } from './handlers/imports';
 import {
   handleAuthorizeDownload,
   handleAuthorizeUpload,
@@ -61,8 +57,10 @@ interface Entry {
   handler: Handler;
 }
 
-const plain = (handler: (request: Request) => Promise<Response>): Handler => (request) =>
-  handler(request);
+const plain =
+  (handler: (request: Request) => Promise<Response>): Handler =>
+  (request) =>
+    handler(request);
 
 export const ROUTE_TABLE: Entry[] = [
   { method: 'POST', pattern: /^\/api\/auth\/signup$/u, handler: plain(handleSignup) },
@@ -192,14 +190,13 @@ export interface LocalFetchOptions {
 export function createLocalFetch(options: LocalFetchOptions = {}): typeof fetch {
   const jar = options.jar ?? new CookieJar();
 
-  const localFetch = async (
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> => {
+  const localFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const rawUrl =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const url = new URL(rawUrl, 'http://localhost:3000');
-    const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const method = (
+      init?.method ?? (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase();
 
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : {}));
     const cookie = jar.header();
@@ -236,5 +233,5 @@ export function createLocalFetch(options: LocalFetchOptions = {}): typeof fetch 
     return response;
   };
 
-  return localFetch as unknown as typeof fetch;
+  return localFetch;
 }

@@ -62,7 +62,9 @@ export type SubkeyPurpose = 'objects' | 'manifests' | 'index' | 'source';
 
 /** Short, non-secret fingerprint used to detect a mismatched bundle or key. */
 export async function vaultKeyId(key: Uint8Array): Promise<string> {
-  const digest = await sha256(await hkdfSha256(key, new Uint8Array(32), toUtf8('chatvault/keyid/v1')));
+  const digest = await sha256(
+    await hkdfSha256(key, new Uint8Array(32), toUtf8('chatvault/keyid/v1')),
+  );
   return toHex(digest.subarray(0, 8));
 }
 
@@ -90,7 +92,10 @@ async function passphraseWrappingKey(
   });
 }
 
-async function recoveryWrappingKey(recoveryBytes: Uint8Array, saltB64: string): Promise<Uint8Array> {
+async function recoveryWrappingKey(
+  recoveryBytes: Uint8Array,
+  saltB64: string,
+): Promise<Uint8Array> {
   return hkdfSha256(recoveryBytes, fromBase64(saltB64), toUtf8('chatvault/recovery/v1'));
 }
 

@@ -63,9 +63,7 @@ describe('hostile archives', () => {
   });
 
   it('refuses an absolute path and a Windows drive letter', async () => {
-    const { skipped, files } = await readArchiveEntries(
-      zipSync({ 'ok.txt': new Uint8Array([1]) }),
-    );
+    const { skipped, files } = await readArchiveEntries(zipSync({ 'ok.txt': new Uint8Array([1]) }));
     expect(files.size).toBe(1);
     expect(skipped).toHaveLength(0);
 

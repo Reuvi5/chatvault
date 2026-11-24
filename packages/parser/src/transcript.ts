@@ -30,7 +30,8 @@ import type {
 } from './types';
 
 /** Invisible marks the export inserts around timestamps and media markers. */
-const EDGE_BIDI = /^[\u200e\u200f\u202a-\u202e\u2066-\u2069\s]+|[\u200e\u200f\u202a-\u202e\u2066-\u2069\s]+$/gu;
+const EDGE_BIDI =
+  /^[\u200e\u200f\u202a-\u202e\u2066-\u2069\s]+|[\u200e\u200f\u202a-\u202e\u2066-\u2069\s]+$/gu;
 
 const IOS_WITH_COMMA = /^[\u200e\u200f]?\[([^\],]+),\s*([^\]]+)\]\s*[\u200e\u200f]?([\s\S]*)$/u;
 const IOS_WITHOUT_COMMA = /^[\u200e\u200f]?\[([^\s\]]+)\s+([^\]]+)\]\s*[\u200e\u200f]?([\s\S]*)$/u;

@@ -71,6 +71,16 @@ export interface ArchiveReadResult {
 
 const UNSAFE_PATH = /(?:^|[/\\])\.\.(?:[/\\]|$)|^[/\\]|^[A-Za-z]:|[\u0000-\u001f]/u;
 
+/**
+ * Everything this module rejects comes back as an `ArchiveError` with a code, so
+ * a caller can tell "this archive is too big" from "this archive is corrupt"
+ * without matching on message text.
+ */
+function toArchiveError(error: unknown): ArchiveError {
+  if (error instanceof ArchiveError) return error;
+  return new ArchiveError(error instanceof Error ? error.message : String(error), 'corrupt');
+}
+
 function classify(path: string): { accept: boolean; reason?: SkippedEntry['reason'] } {
   if (path.endsWith('/') || path.endsWith('\\')) return { accept: false, reason: 'directory' };
   if (UNSAFE_PATH.test(path)) return { accept: false, reason: 'unsafe_path' };
@@ -211,11 +221,18 @@ export async function readArchiveStream(options: ReadArchiveOptions): Promise<Ar
         entryBytes += chunk.byteLength;
         totalBytes += chunk.byteLength;
         if (entryBytes > limits.maxEntryBytes) {
-          fail(new ArchiveError(`${baseName(file.name)} is too large to import.`, 'entry_too_large'));
+          fail(
+            new ArchiveError(`${baseName(file.name)} is too large to import.`, 'entry_too_large'),
+          );
           return;
         }
         if (totalBytes > limits.maxTotalBytes) {
-          fail(new ArchiveError('This archive expands to more data than ChatVault will import.', 'archive_too_large'));
+          fail(
+            new ArchiveError(
+              'This archive expands to more data than ChatVault will import.',
+              'archive_too_large',
+            ),
+          );
           return;
         }
         if (
@@ -269,7 +286,7 @@ export async function readArchiveStream(options: ReadArchiveOptions): Promise<Ar
   }
 
   await chain;
-  if (fatal) throw fatal;
+  if (fatal) throw toArchiveError(fatal);
   return { entryCount, totalBytes, skipped };
 }
 
@@ -284,7 +301,10 @@ export async function collectEntry(
   for await (const chunk of chunks) {
     total += chunk.byteLength;
     if (total > maxBytes) {
-      throw new ArchiveError(`${label} is larger than ${String(maxBytes)} bytes.`, 'entry_too_large');
+      throw new ArchiveError(
+        `${label} is larger than ${String(maxBytes)} bytes.`,
+        'entry_too_large',
+      );
     }
     parts.push(chunk);
   }
@@ -298,7 +318,10 @@ export async function collectEntry(
 }
 
 /** Turn a byte array into the single-chunk async source `readArchiveStream` wants. */
-export async function* bytesSource(bytes: Uint8Array, chunkSize = 1 << 20): AsyncGenerator<Uint8Array> {
+export async function* bytesSource(
+  bytes: Uint8Array,
+  chunkSize = 1 << 20,
+): AsyncGenerator<Uint8Array> {
   for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
     yield bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength));
   }

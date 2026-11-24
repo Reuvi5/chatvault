@@ -30,7 +30,9 @@ async function main(): Promise<void> {
        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
        ORDER BY c.relname`,
     );
-    console.log(`Tables with row-level security: ${check.rows.map((row) => row.relname).join(', ')}`);
+    console.log(
+      `Tables with row-level security: ${check.rows.map((row) => row.relname).join(', ')}`,
+    );
   } catch (error) {
     console.error('The migration failed:', error instanceof Error ? error.message : error);
     process.exitCode = 1;

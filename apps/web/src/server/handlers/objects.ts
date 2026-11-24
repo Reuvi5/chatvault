@@ -6,10 +6,7 @@
  * against that account, so a valid ticket from one account is useless on
  * another's object, and a valid session cannot reach an object it does not own.
  */
-import {
-  completeObjectRequest,
-  uploadAuthorizeRequest,
-} from '@chatvault/protocol';
+import { completeObjectRequest, uploadAuthorizeRequest } from '@chatvault/protocol';
 import { getStore } from '../db/index';
 import {
   badRequest,
@@ -38,9 +35,7 @@ export async function handleAuthorizeUpload(request: Request): Promise<Response>
   enforceRateLimit(`upload:${account.id}`, getEnv().rateLimits.upload);
   const input = await parseBody(request, uploadAuthorizeRequest);
   const store = await getStore();
-  const result = await store.transaction(account.id, (tx) =>
-    authorizeUpload(tx, account, input),
-  );
+  const result = await store.transaction(account.id, (tx) => authorizeUpload(tx, account, input));
   return jsonResponse(result, { status: 201 });
 }
 
@@ -69,14 +64,12 @@ export async function handleUploadPart(
   }
 
   const store = await getStore();
-  const result = await store.transaction(account.id, (tx) =>
-    receivePart(tx, account.id, {
-      objectId,
-      partNumber,
-      ticket: request.headers.get(TICKET_HEADER),
-      bytes,
-    }),
-  );
+  const result = await receivePart(store, account.id, {
+    objectId,
+    partNumber,
+    ticket: request.headers.get(TICKET_HEADER),
+    bytes,
+  });
   return jsonResponse(result);
 }
 
@@ -85,9 +78,10 @@ export async function handleCompleteObject(request: Request): Promise<Response> 
   enforceRateLimit(`upload:${account.id}`, getEnv().rateLimits.upload);
   const input = await parseBody(request, completeObjectRequest);
   const store = await getStore();
-  const verdict = await store.transaction(account.id, (tx) =>
-    completeObject(tx, account, { ...input, clientHash: clientHash(request) }),
-  );
+  const verdict = await completeObject(store, account, {
+    ...input,
+    clientHash: clientHash(request),
+  });
   if (verdict.status === 'rejected') {
     throw badRequest(`That upload was not accepted: ${verdict.reason}`);
   }
@@ -101,23 +95,20 @@ export async function handleAuthorizeDownload(
   const { account } = await requireVerifiedSession(request);
   enforceRateLimit(`read:${account.id}`, getEnv().rateLimits.read);
   const store = await getStore();
-  const result = await store.transaction(account.id, (tx) =>
-    authorizeDownload(tx, account.id, objectId),
-  );
+  // Reads from the providers to pick a copy, so no transaction is held.
+  const result = await authorizeDownload(store, account.id, objectId);
   return jsonResponse(result);
 }
 
-export async function handleObjectContent(
-  request: Request,
-  objectId: string,
-): Promise<Response> {
+export async function handleObjectContent(request: Request, objectId: string): Promise<Response> {
   const { account } = await requireVerifiedSession(request);
   enforceRateLimit(`read:${account.id}`, getEnv().rateLimits.read);
   const store = await getStore();
-  const ticket = request.headers.get(TICKET_HEADER) ?? new URL(request.url).searchParams.get('ticket');
+  const ticket =
+    request.headers.get(TICKET_HEADER) ?? new URL(request.url).searchParams.get('ticket');
   const { stream, bytes, servedBy } = await openObjectStream(store, account.id, objectId, ticket);
 
-  return new Response(stream as unknown as BodyInit, {
+  return new Response(stream, {
     status: 200,
     headers: {
       'content-type': 'application/octet-stream',
@@ -131,10 +122,7 @@ export async function handleObjectContent(
   });
 }
 
-export async function handleHeadObject(
-  request: Request,
-  objectId: string,
-): Promise<Response> {
+export async function handleHeadObject(request: Request, objectId: string): Promise<Response> {
   const { account } = await requireVerifiedSession(request);
   const store = await getStore();
   const object = await store.get('objects', objectId);

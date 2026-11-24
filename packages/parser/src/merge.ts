@@ -61,7 +61,9 @@ export function fingerprint(message: CanonicalMessage): string {
 }
 
 function reseq(messages: readonly CanonicalMessage[]): CanonicalMessage[] {
-  return messages.map((message, index) => (message.seq === index ? message : { ...message, seq: index }));
+  return messages.map((message, index) =>
+    message.seq === index ? message : { ...message, seq: index },
+  );
 }
 
 function slicesMatch(
@@ -176,8 +178,7 @@ export function mergeMessages(
             reason: 'omitted_by_new_export',
             localTs: message.localTs,
             sender: message.sender,
-            detail:
-              'This message is in your archive but not in the new export. ChatVault kept it.',
+            detail: 'This message is in your archive but not in the new export. ChatVault kept it.',
           });
         }
       }

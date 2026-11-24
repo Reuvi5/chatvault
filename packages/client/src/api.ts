@@ -101,7 +101,9 @@ export class ApiClient {
     const parsed: unknown = text === '' ? null : safeJsonParse(text);
 
     if (!response.ok) {
-      const envelope = parsed as { error?: { code?: ApiErrorCode; message?: string; details?: unknown } } | null;
+      const envelope = parsed as {
+        error?: { code?: ApiErrorCode; message?: string; details?: unknown };
+      } | null;
       throw new ApiRequestError(
         response.status,
         envelope?.error?.code ?? 'unknown',
@@ -114,12 +116,19 @@ export class ApiClient {
 
   /* ------------------------------------------------------------- accounts */
 
-  async signup(email: string, password: string): Promise<{ accountId: string; verificationUrl?: string }> {
+  async signup(
+    email: string,
+    password: string,
+  ): Promise<{ accountId: string; verificationUrl?: string }> {
     return this.request('POST', '/api/auth/signup', { email, password });
   }
 
   async login(email: string, password: string, totp?: string): Promise<SessionInfo> {
-    return this.request('POST', '/api/auth/login', totp ? { email, password, totp } : { email, password });
+    return this.request(
+      'POST',
+      '/api/auth/login',
+      totp ? { email, password, totp } : { email, password },
+    );
   }
 
   async logout(): Promise<void> {
@@ -153,7 +162,10 @@ export class ApiClient {
 
   /* --------------------------------------------------------------- vaults */
 
-  async createVault(bundle: VaultBundleWire, assumedTimeZone: string): Promise<{ vaultId: string }> {
+  async createVault(
+    bundle: VaultBundleWire,
+    assumedTimeZone: string,
+  ): Promise<{ vaultId: string }> {
     return this.request('POST', '/api/vaults', { bundle, assumedTimeZone });
   }
 
@@ -168,11 +180,11 @@ export class ApiClient {
   /* -------------------------------------------------------------- imports */
 
   async createImport(request: CreateImportRequest): Promise<CreateImportResponse> {
-    return this.request('POST', '/api/imports', request as unknown as Json);
+    return this.request('POST', '/api/imports', request);
   }
 
   async authorizeUpload(request: UploadAuthorizeRequest): Promise<UploadAuthorizeResponse> {
-    return this.request('POST', '/api/objects/upload-authorize', request as unknown as Json);
+    return this.request('POST', '/api/objects/upload-authorize', request);
   }
 
   /** Uploads one part of an object's ciphertext. Safe to retry. */
@@ -203,18 +215,14 @@ export class ApiClient {
   }
 
   async completeObject(request: CompleteObjectRequest): Promise<{ objectId: string }> {
-    return this.request('POST', '/api/objects/complete', request as unknown as Json);
+    return this.request('POST', '/api/objects/complete', request);
   }
 
   async completeImport(
     importId: string,
     request: CompleteImportRequest,
   ): Promise<ImportStatusResponse> {
-    return this.request(
-      'POST',
-      `/api/imports/${encodeURIComponent(importId)}/complete`,
-      request as unknown as Json,
-    );
+    return this.request('POST', `/api/imports/${encodeURIComponent(importId)}/complete`, request);
   }
 
   async importStatus(importId: string): Promise<ImportStatusResponse> {
@@ -228,10 +236,7 @@ export class ApiClient {
   }
 
   async authorizeDownload(objectId: string): Promise<DownloadAuthorizeResponse> {
-    return this.request(
-      'GET',
-      `/api/objects/${encodeURIComponent(objectId)}/download-authorize`,
-    );
+    return this.request('GET', `/api/objects/${encodeURIComponent(objectId)}/download-authorize`);
   }
 
   /** Fetches object ciphertext. The body is opaque to the server. */
@@ -272,7 +277,9 @@ export class ApiClient {
 
   /* ----------------------------------------------------------- operations */
 
-  async runReplication(limit = 50): Promise<{ processed: number; verified: number; failed: number }> {
+  async runReplication(
+    limit = 50,
+  ): Promise<{ processed: number; verified: number; failed: number }> {
     return this.request('POST', '/api/ops/replicate', { limit });
   }
 

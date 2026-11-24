@@ -35,10 +35,7 @@ function stripe(): Stripe {
   return client;
 }
 
-export async function ensureCustomer(
-  store: Store,
-  account: RowOf<'accounts'>,
-): Promise<string> {
+export async function ensureCustomer(store: Store, account: RowOf<'accounts'>): Promise<string> {
   if (account.stripe_customer_id) return account.stripe_customer_id;
   const customer = await stripe().customers.create({
     email: account.email,
@@ -58,7 +55,9 @@ export async function createCheckoutSession(
 ): Promise<{ url: string }> {
   const env = getEnv();
   if (!env.billing.stripePriceId) {
-    throw notConfigured('Set STRIPE_PRICE_ID to the metered price for storage before taking payments.');
+    throw notConfigured(
+      'Set STRIPE_PRICE_ID to the metered price for storage before taking payments.',
+    );
   }
   const customerId = await ensureCustomer(store, account);
   const session = await stripe().checkout.sessions.create({
@@ -152,7 +151,9 @@ export async function handleWebhook(
     event = stripe().webhooks.constructEvent(rawBody, signature, env.billing.stripeWebhookSecret);
   } catch (error) {
     log.warn('Rejected a Stripe webhook with a bad signature');
-    throw badRequest(`Webhook signature verification failed: ${error instanceof Error ? error.message : 'unknown'}`);
+    throw badRequest(
+      `Webhook signature verification failed: ${error instanceof Error ? error.message : 'unknown'}`,
+    );
   }
 
   const customerIdOf = (object: unknown): string | null => {

@@ -1,5 +1,9 @@
 'use client';
 
+/* eslint-disable jsx-a11y/no-autofocus --
+   This panel opens only when the reader asks to search, and the field is the
+   whole point of it, so moving focus there is what they expect. */
+
 /**
  * Search across every unlocked conversation.
  *
@@ -43,7 +47,9 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
           setLoaded(done);
         }
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'Some conversations could not be read.');
+        setError(
+          caught instanceof Error ? caught.message : 'Some conversations could not be read.',
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,6 +95,7 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
       <Card className="space-y-3 p-4">
         <TextInput
           autoFocus
+          id="search-query"
           placeholder='Words to find, or "an exact phrase"'
           aria-label="Search your messages"
           value={query}
@@ -103,24 +110,26 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
             />
             Only messages with attachments
           </label>
-          <label className="flex items-center gap-2">
-            From
+          <div className="flex items-center gap-2">
+            <label htmlFor="search-from">From</label>
             <TextInput
+              id="search-from"
               type="date"
               className="w-40"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
             />
-          </label>
-          <label className="flex items-center gap-2">
-            To
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="search-to">To</label>
             <TextInput
+              id="search-to"
               type="date"
               className="w-40"
               value={to}
               onChange={(event) => setTo(event.target.value)}
             />
-          </label>
+          </div>
         </div>
         <p className="muted text-xs">
           Search runs on this device over messages that have been decrypted for this session.

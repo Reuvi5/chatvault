@@ -191,7 +191,7 @@ export class S3ObjectDriver implements ObjectDriver {
         return body.transformToWebStream() as ReadableStream<Uint8Array>;
       }
       const bytes = await this.get(key);
-      return new Blob([bytes as unknown as BlobPart]).stream() as ReadableStream<Uint8Array>;
+      return new Blob([bytes as unknown as BlobPart]).stream();
     } catch (error) {
       throw this.wrap(error, key);
     }

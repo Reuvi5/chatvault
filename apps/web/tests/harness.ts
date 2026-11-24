@@ -75,7 +75,7 @@ export async function createAccount(options: { verify?: boolean } = {}): Promise
     await api.verifyEmail(token);
   }
   const created = await createVault(TEST_PASSPHRASE, { argon2: FAST_ARGON2ID_PARAMS });
-  await api.createVault(created.vault.bundle as never, 'UTC');
+  await api.createVault(created.vault.bundle, 'UTC');
   return {
     api,
     jar,

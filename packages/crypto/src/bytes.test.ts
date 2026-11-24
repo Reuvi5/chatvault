@@ -71,7 +71,9 @@ describe('constant-time comparison', () => {
 
 describe('canonical JSON for additional authenticated data', () => {
   it('is independent of key order', () => {
-    expect(canonicalJson({ b: 1, a: { d: 2, c: 3 } })).toBe(canonicalJson({ a: { c: 3, d: 2 }, b: 1 }));
+    expect(canonicalJson({ b: 1, a: { d: 2, c: 3 } })).toBe(
+      canonicalJson({ a: { c: 3, d: 2 }, b: 1 }),
+    );
   });
 
   it('keeps array order, which is meaningful', () => {

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Button, cx } from '@/components/ui';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { useVault } from '@/components/VaultProvider';
 
 const LINKS = [
@@ -32,14 +33,17 @@ export function Nav() {
 
         <nav className="ml-2 hidden gap-1 sm:flex">
           {LINKS.map((link) => {
-            const active = link.href === '/app' ? pathname === '/app' : pathname.startsWith(link.href);
+            const active =
+              link.href === '/app' ? pathname === '/app' : pathname.startsWith(link.href);
             return (
               <Link
                 key={link.href}
                 href={link.href}
                 className={cx(
                   'rounded-lg px-3 py-1.5 text-sm',
-                  active ? 'bg-accent-100 font-medium text-accent-700 dark:bg-accent-700/30 dark:text-accent-100' : 'muted hover:bg-ink-100 dark:hover:bg-ink-800',
+                  active
+                    ? 'bg-accent-100 font-medium text-accent-700 dark:bg-accent-700/30 dark:text-accent-100'
+                    : 'muted hover:bg-ink-100 dark:hover:bg-ink-800',
                 )}
               >
                 {link.label}
@@ -50,6 +54,7 @@ export function Nav() {
 
         <div className="ml-auto flex items-center gap-2">
           <span className="muted hidden text-xs sm:inline">{session?.email}</span>
+          <ThemeToggle />
           <Button onClick={() => void lock()} title="Clear the key from memory and the local cache">
             Lock
           </Button>

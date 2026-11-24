@@ -134,7 +134,9 @@ describe('subkey separation', () => {
     expect(new Set(keys.map(toHex)).size).toBe(purposes.length);
 
     const other = await makeVault();
-    expect(toHex(await deriveSubkey(other.vault.key, 'objects'))).not.toBe(toHex(keys[0] as Uint8Array));
+    expect(toHex(await deriveSubkey(other.vault.key, 'objects'))).not.toBe(
+      toHex(keys[0] as Uint8Array),
+    );
   });
 
   it('cannot read a manifest with the objects subkey', async () => {

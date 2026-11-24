@@ -31,6 +31,7 @@ import {
   Button,
   Card,
   Field,
+  LiveStatus,
   Notice,
   ProgressBar,
   Spinner,
@@ -104,7 +105,7 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
   }, [preview, existingMessages]);
 
   const estimatedMonthlyCost = preview
-    ? ((existingMessages ? mergePreview?.added ?? 0 : 1) === 0
+    ? ((existingMessages ? (mergePreview?.added ?? 0) : 1) === 0
         ? 0
         : preview.estimates.estimatedCiphertextBytes / BYTES_PER_GB) * PRICE_USD_PER_GB_MONTH
     : 0;
@@ -158,8 +159,8 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
             <h2 className="text-lg font-semibold">Choose an export</h2>
             <p className="muted text-sm leading-relaxed">
               In your messaging app, open the conversation, choose its export option, and include
-              media if you want the photos and voice notes archived. Then pick the{' '}
-              <code>.zip</code> or <code>.txt</code> file here.
+              media if you want the photos and voice notes archived. Then pick the <code>.zip</code>{' '}
+              or <code>.txt</code> file here.
             </p>
           </div>
 
@@ -253,7 +254,8 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
             <div>
               <dt className="muted text-xs uppercase tracking-wide">Covers</dt>
               <dd className="text-sm font-medium">
-                {parsed.firstLocalTs?.slice(0, 10) ?? '—'} → {parsed.lastLocalTs?.slice(0, 10) ?? '—'}
+                {parsed.firstLocalTs?.slice(0, 10) ?? '—'} →{' '}
+                {parsed.lastLocalTs?.slice(0, 10) ?? '—'}
               </dd>
             </div>
           </dl>
@@ -375,7 +377,11 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
             ))}
             {missing.length > 0 ? (
               <p>
-                Missing files include: {missing.slice(0, 3).map((item) => item.fileName).join(', ')}
+                Missing files include:{' '}
+                {missing
+                  .slice(0, 3)
+                  .map((item) => item.fileName)
+                  .join(', ')}
                 {missing.length > 3 ? ` and ${String(missing.length - 3)} more` : ''}.
               </p>
             ) : null}
@@ -436,14 +442,14 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
         <p className="muted flex items-center gap-2 text-sm">
           <Spinner /> {progress?.label ?? 'Starting…'}
         </p>
+        <LiveStatus>{progress?.label ?? 'Starting the import'}</LiveStatus>
         <ProgressBar
           value={progress?.bytesDone ?? 0}
           max={Math.max(1, progress?.bytesTotal ?? 1)}
         />
         <p className="muted text-xs tabular-nums">
-          {formatBytes(progress?.bytesDone ?? 0)} of about{' '}
-          {formatBytes(progress?.bytesTotal ?? 0)} · object {progress?.objectsDone ?? 0} of{' '}
-          {progress?.objectsTotal ?? 0}
+          {formatBytes(progress?.bytesDone ?? 0)} of about {formatBytes(progress?.bytesTotal ?? 0)}{' '}
+          · object {progress?.objectsDone ?? 0} of {progress?.objectsTotal ?? 0}
         </p>
         <p className="muted text-xs">
           Everything is encrypted on this device before it is sent. Leave this tab open until it
@@ -490,8 +496,8 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
             </li>
             {status ? (
               <li>
-                Storage: {status.objects.primaryStored} on the primary,{' '}
-                {status.objects.verified} verified on both.
+                Storage: {status.objects.primaryStored} on the primary, {status.objects.verified}{' '}
+                verified on both.
               </li>
             ) : null}
           </ul>
@@ -499,8 +505,8 @@ export function ImportWizard({ targetConversationId }: { targetConversationId?: 
           <Notice tone="warn" title="Keep your original export for now">
             <p>
               Open the conversation, read a few messages and play an attachment. Only delete your
-              original once you have seen the archive work, and never delete the conversation in your
-              messaging app because of anything shown here.
+              original once you have seen the archive work, and never delete the conversation in
+              your messaging app because of anything shown here.
             </p>
           </Notice>
 

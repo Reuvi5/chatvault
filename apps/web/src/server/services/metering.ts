@@ -122,7 +122,10 @@ export async function buildUsageResponse(
   const { samples, carryInBytes } = await usageSamplesForMonth(store, account.id, nowMs);
 
   // Include the live measurement so the estimate reflects this moment.
-  const withCurrent: UsageSample[] = [...samples, { atMs: nowMs, logicalBytes: snapshot.logicalBytes }];
+  const withCurrent: UsageSample[] = [
+    ...samples,
+    { atMs: nowMs, logicalBytes: snapshot.logicalBytes },
+  ];
   const policy = {
     pricePerGbMonth: env.billing.pricePerGbMonth,
     freeAllowanceBytes: env.billing.freeAllowanceBytes,
@@ -173,14 +176,18 @@ export async function accrueBillingPeriod(
   const key = monthKey(nowMs);
   const { samples, carryInBytes } = await usageSamplesForMonth(store, accountId, nowMs);
   const snapshot = await measureUsage(store, accountId);
-  const quote = quoteMonth([...samples, { atMs: nowMs, logicalBytes: snapshot.logicalBytes }], nowMs, {
-    carryInBytes,
-    policy: {
-      pricePerGbMonth: env.billing.pricePerGbMonth,
-      freeAllowanceBytes: env.billing.freeAllowanceBytes,
-      minimumCents: env.billing.minimumCents,
+  const quote = quoteMonth(
+    [...samples, { atMs: nowMs, logicalBytes: snapshot.logicalBytes }],
+    nowMs,
+    {
+      carryInBytes,
+      policy: {
+        pricePerGbMonth: env.billing.pricePerGbMonth,
+        freeAllowanceBytes: env.billing.freeAllowanceBytes,
+        minimumCents: env.billing.minimumCents,
+      },
     },
-  });
+  );
 
   const existing = await store.findOne('billing_periods', {
     equals: { account_id: accountId, period_key: key },
@@ -193,7 +200,12 @@ export async function accrueBillingPeriod(
       accrued_cents: accruedCents,
       updated_at_ms: nowMs,
     });
-    return { ...existing, gb_months: quote.gbMonths, accrued_cents: accruedCents, updated_at_ms: nowMs };
+    return {
+      ...existing,
+      gb_months: quote.gbMonths,
+      accrued_cents: accruedCents,
+      updated_at_ms: nowMs,
+    };
   }
 
   const row: RowOf<'billing_periods'> = {

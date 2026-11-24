@@ -119,8 +119,8 @@ export function SetupVault() {
         <div className="space-y-1">
           <h1 className="text-xl font-semibold">Set up your archive key</h1>
           <p className="muted text-sm leading-relaxed">
-            This passphrase derives the key that encrypts everything before it is uploaded. It is not
-            your sign-in password, and it never reaches the server.
+            This passphrase derives the key that encrypts everything before it is uploaded. It is
+            not your sign-in password, and it never reaches the server.
           </p>
         </div>
 

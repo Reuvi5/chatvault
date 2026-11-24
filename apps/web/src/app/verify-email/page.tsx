@@ -9,25 +9,31 @@ import { Card, Notice, Spinner } from '@/components/ui';
 function VerifyEmailInner() {
   const params = useSearchParams();
   const token = params.get('token');
-  const [state, setState] = useState<'working' | 'done' | 'error'>('working');
-  const [message, setMessage] = useState('');
+  // A missing token is knowable while rendering, so it is the initial state
+  // rather than something an effect corrects a moment later.
+  const [state, setState] = useState<'working' | 'done' | 'error'>(token ? 'working' : 'error');
+  const [message, setMessage] = useState(
+    token ? '' : 'That link is missing its confirmation code.',
+  );
 
   useEffect(() => {
-    if (!token) {
-      setState('error');
-      setMessage('That link is missing its confirmation code.');
-      return;
-    }
-    const api = new ApiClient();
-    api
-      .verifyEmail(token)
-      .then(() => setState('done'))
-      .catch((error: unknown) => {
+    if (!token) return;
+    let active = true;
+    void (async () => {
+      try {
+        await new ApiClient().verifyEmail(token);
+        if (active) setState('done');
+      } catch (error) {
+        if (!active) return;
         setState('error');
         setMessage(
           error instanceof ApiRequestError ? error.message : 'That link could not be confirmed.',
         );
-      });
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [token]);
 
   return (

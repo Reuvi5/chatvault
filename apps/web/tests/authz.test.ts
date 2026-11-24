@@ -7,7 +7,13 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ApiRequestError } from '@chatvault/client';
-import { cleanupDataDir, createAccount, importFixture, newClient, type TestAccount } from './harness';
+import {
+  cleanupDataDir,
+  createAccount,
+  importFixture,
+  newClient,
+  type TestAccount,
+} from './harness';
 
 let alice: TestAccount;
 let bob: TestAccount;
@@ -34,7 +40,10 @@ afterAll(async () => {
   await cleanupDataDir();
 });
 
-async function expectDenied(action: () => Promise<unknown>, codes: string[] = ['not_found', 'forbidden']) {
+async function expectDenied(
+  action: () => Promise<unknown>,
+  codes: string[] = ['not_found', 'forbidden'],
+) {
   try {
     await action();
   } catch (error) {
@@ -93,7 +102,11 @@ describe('one account cannot reach another account', () => {
       }),
     );
     await expectDenied(() =>
-      bob.api.authorizeUpload({ importId: aliceImportId, kind: 'page', expectedCiphertextBytes: 10 }),
+      bob.api.authorizeUpload({
+        importId: aliceImportId,
+        kind: 'page',
+        expectedCiphertextBytes: 10,
+      }),
     );
   });
 
@@ -130,7 +143,13 @@ describe('sessions', () => {
     await expectDenied(() => api.conversations(), ['unauthorized']);
     await expectDenied(() => api.usage(), ['unauthorized']);
     await expectDenied(
-      () => api.createImport({ plannedCiphertextBytes: 1, plannedObjectCount: 1, parserVersion: 1, cryptoVersion: 1 }),
+      () =>
+        api.createImport({
+          plannedCiphertextBytes: 1,
+          plannedObjectCount: 1,
+          parserVersion: 1,
+          cryptoVersion: 1,
+        }),
       ['unauthorized'],
     );
   });

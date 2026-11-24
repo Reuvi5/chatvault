@@ -10,7 +10,12 @@ import { S3ObjectDriver } from './s3Driver';
 function build(config: ProviderConfig): ObjectDriver {
   if (config.kind === 'local') {
     if (!config.directory) throw new Error(`${config.label}: a directory is required`);
-    return new LocalObjectDriver(config.label, config.directory, config.partSizeBytes);
+    return new LocalObjectDriver(
+      config.label,
+      config.directory,
+      config.partSizeBytes,
+      config.latencyMs,
+    );
   }
   const missing = (['bucket', 'accessKeyId', 'secretAccessKey'] as const).filter(
     (key) => !config[key],

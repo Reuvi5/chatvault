@@ -91,16 +91,16 @@ and a new salt rather than rewriting one.
 That binds every frame to its object, its position, its header and whether it is
 the last frame. The consequences, each covered by a test:
 
-| Attack | Result |
-| --- | --- |
-| Flip any bit, anywhere | Authentication fails |
-| Reorder two frames | Fails: the frame index is authenticated |
-| Duplicate a frame | Fails |
-| Drop the last frame | Fails: no frame marked final arrived |
-| Append frames after the final one | Fails |
-| Serve object B for object A | Fails: the key is derived from the identifier |
-| Edit the header | Fails: the header digest is in every frame's AAD |
-| Wrong key | Fails, with one undifferentiated error |
+| Attack                            | Result                                           |
+| --------------------------------- | ------------------------------------------------ |
+| Flip any bit, anywhere            | Authentication fails                             |
+| Reorder two frames                | Fails: the frame index is authenticated          |
+| Duplicate a frame                 | Fails                                            |
+| Drop the last frame               | Fails: no frame marked final arrived             |
+| Append frames after the final one | Fails                                            |
+| Serve object B for object A       | Fails: the key is derived from the identifier    |
+| Edit the header                   | Fails: the header digest is in every frame's AAD |
+| Wrong key                         | Fails, with one undifferentiated error           |
 
 Decryption errors never say which check failed.
 
@@ -110,7 +110,7 @@ time, so a multi-gigabyte attachment is never held in memory.
 ## Rollback detection
 
 Frame authentication proves an object was not altered. It cannot prove the object
-is the *current* one: a hostile server could serve an older, perfectly authentic
+is the _current_ one: a hostile server could serve an older, perfectly authentic
 version. So the (encrypted) manifest records the SHA-256 of each page's and each
 attachment's plaintext, and the reader checks it after decrypting. A stale object
 decrypts and is then refused, naming the page.
@@ -127,7 +127,7 @@ quietly overwrite each other.
   and recomputes it** before accepting the upload. A mismatch is refused, the
   blob removed, the row deleted and an audit event written. The replication
   worker checks the same digest against the second copy.
-- The server's digest is not an integrity proof *to the client* — the server
+- The server's digest is not an integrity proof _to the client_ — the server
   computed it. The AES-GCM tags are, and the client verifies the digest it
   receives only to catch a corrupted transfer early.
 
@@ -142,17 +142,17 @@ in `packages/protocol/src/api.ts` are the enforced definition of that boundary.
 
 Enforced in `packages/protocol/src/constants.ts` and checked by tests:
 
-| Limit | Value |
-| --- | --- |
-| Frames per object | 262,144 |
-| Ciphertext per frame | 8 MiB hard ceiling |
-| Object header | 1 KiB |
-| Archive entries | 200,000 |
-| Single entry | 2 GiB |
-| Transcript | 256 MiB |
-| Whole archive (uncompressed) | 8 GiB |
-| Compression ratio | 200× before the import is refused |
-| Messages per import | 2,000,000 |
+| Limit                        | Value                             |
+| ---------------------------- | --------------------------------- |
+| Frames per object            | 262,144                           |
+| Ciphertext per frame         | 8 MiB hard ceiling                |
+| Object header                | 1 KiB                             |
+| Archive entries              | 200,000                           |
+| Single entry                 | 2 GiB                             |
+| Transcript                   | 256 MiB                           |
+| Whole archive (uncompressed) | 8 GiB                             |
+| Compression ratio            | 200× before the import is refused |
+| Messages per import          | 2,000,000                         |
 
 ## Known gaps
 

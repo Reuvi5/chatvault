@@ -111,7 +111,10 @@ export function searchCorpora(
   const limit = options.limit ?? 200;
   const hits: SearchHit[] = [];
   const hasFilters =
-    Boolean(options.sender) || Boolean(options.attachmentsOnly) || Boolean(options.from) || Boolean(options.to);
+    Boolean(options.sender) ||
+    Boolean(options.attachmentsOnly) ||
+    Boolean(options.from) ||
+    Boolean(options.to);
   if (terms.isEmpty && !hasFilters) return hits;
 
   for (const corpus of corpora) {
@@ -155,10 +158,7 @@ export function searchCorpora(
         index,
         message,
         score,
-        snippet: snippetFor(
-          message.body || message.attachmentFileName || '',
-          longest,
-        ),
+        snippet: snippetFor(message.body || message.attachmentFileName || '', longest),
       });
     }
   }
@@ -168,7 +168,9 @@ export function searchCorpora(
 }
 
 /** Day boundaries for a conversation, used by "jump to date". */
-export function dateIndex(messages: readonly CanonicalMessage[]): Array<{ date: string; index: number }> {
+export function dateIndex(
+  messages: readonly CanonicalMessage[],
+): Array<{ date: string; index: number }> {
   const out: Array<{ date: string; index: number }> = [];
   let current = '';
   for (let index = 0; index < messages.length; index += 1) {

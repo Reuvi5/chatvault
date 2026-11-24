@@ -4,14 +4,20 @@
  * The conversation view.
  *
  * Familiar chat shape — bubbles, sender labels, date separators — built from
- * scratch rather than copied from any product, with no third-party assets.
+ * scratch, with no third-party assets.
  *
- * Long conversations: messages are grouped by day and each day is a section with
- * `content-visibility: auto`, so the browser skips layout and paint for days
- * that are off screen while keeping the scrollbar honest. Only a window of
- * recent days is mounted at first; earlier days load on demand. That keeps a
- * hundred-thousand-message conversation responsive without a virtual scroller
- * that would fight with variable-height media.
+ * How this stays usable at a hundred thousand messages:
+ *
+ *  - Messages are grouped by day, and each day is a section with
+ *    `content-visibility: auto`, so the browser skips layout and paint for the
+ *    days that are off screen while the scrollbar stays honest.
+ *  - Only a window of recent days is mounted. The window grows when a sentinel
+ *    above the oldest mounted day comes into view, so scrolling back through a
+ *    long archive is continuous rather than a button press, and the DOM never
+ *    holds the whole conversation at once.
+ *  - Which days are mounted is *derived*, not stored in an effect: a deep link
+ *    into an old day widens the window during render, so there is no second
+ *    render pass and no flash of the wrong content.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationManifest, ManifestAttachmentRef } from '@chatvault/protocol';
@@ -19,7 +25,8 @@ import type { CanonicalMessage } from '@chatvault/parser';
 import { Badge, Button, cx } from '@/components/ui';
 import { Attachment } from '@/components/Attachment';
 
-const DAYS_PER_WINDOW = 14;
+/** Days added each time the reader reaches the top of what is mounted. */
+const DAYS_PER_STEP = 14;
 
 interface Day {
   date: string;
@@ -75,52 +82,75 @@ export function MessageTimeline({
     return map;
   }, [manifest]);
 
-  const [firstDay, setFirstDay] = useState(() => Math.max(0, days.length - DAYS_PER_WINDOW));
+  const [requestedDays, setRequestedDays] = useState(DAYS_PER_STEP);
   const highlightRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Make sure a deep link's target day is mounted, then scroll to it.
-  useEffect(() => {
-    if (highlightIndex === null || highlightIndex === undefined) return;
-    const dayIndex = days.findIndex((day) =>
-      day.messages.some((entry) => entry.index === highlightIndex),
-    );
-    if (dayIndex >= 0 && dayIndex < firstDay) setFirstDay(dayIndex);
-  }, [highlightIndex, days, firstDay]);
+  /* A deep link may point at a day older than the window. Widen it here, while
+     rendering, rather than correcting it afterwards in an effect. */
+  const highlightDay = useMemo(() => {
+    if (highlightIndex === null || highlightIndex === undefined) return -1;
+    return days.findIndex((day) => day.messages.some((entry) => entry.index === highlightIndex));
+  }, [days, highlightIndex]);
 
-  useEffect(() => {
-    if (highlightRef.current) {
-      highlightRef.current.scrollIntoView({ block: 'center' });
-    }
-  }, [highlightIndex, firstDay]);
-
+  const daysNeededForHighlight = highlightDay >= 0 ? days.length - highlightDay : 0;
+  const mountedDays = Math.min(days.length, Math.max(requestedDays, daysNeededForHighlight));
+  const firstDay = days.length - mountedDays;
   const visibleDays = days.slice(firstDay);
-  const hiddenCount = days
+  const hiddenMessages = days
     .slice(0, firstDay)
     .reduce((total, day) => total + day.messages.length, 0);
+
+  /* Grow the window as the reader scrolls back past the oldest mounted day. */
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || firstDay === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setRequestedDays((previous) => previous + DAYS_PER_STEP);
+        }
+      },
+      { rootMargin: '600px 0px 0px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [firstDay]);
+
+  /* Bring a deep-linked message into view once its day is mounted. */
+  useEffect(() => {
+    if (highlightRef.current) highlightRef.current.scrollIntoView({ block: 'center' });
+  }, [highlightIndex, firstDay]);
 
   return (
     <div className="space-y-4">
       {firstDay > 0 ? (
-        <div className="flex flex-col items-center gap-2 py-2">
-          <p className="muted text-xs">
-            {hiddenCount.toLocaleString('en-US')} earlier messages across {firstDay} day
+        <div
+          ref={sentinelRef}
+          className="flex flex-col items-center gap-2 py-3"
+          data-testid="older-messages-sentinel"
+        >
+          <p className="muted text-xs" aria-live="polite">
+            {hiddenMessages.toLocaleString('en-US')} earlier messages, across {firstDay} day
             {firstDay === 1 ? '' : 's'}
           </p>
-          <div className="flex gap-2">
-            <Button onClick={() => setFirstDay(Math.max(0, firstDay - DAYS_PER_WINDOW))}>
-              Load earlier
-            </Button>
-            <Button onClick={() => setFirstDay(0)}>Load all</Button>
-          </div>
+          <Button onClick={() => setRequestedDays((previous) => previous + DAYS_PER_STEP)}>
+            Load earlier
+          </Button>
+          <p className="muted text-[11px]">Or keep scrolling — more loads as you go.</p>
         </div>
       ) : null}
 
       {visibleDays.map((day) => (
-        <section key={day.date} className="day-section space-y-1.5">
+        <section
+          key={day.date}
+          className="day-section space-y-1.5"
+          aria-label={formatDay(day.date)}
+        >
           <div className="sticky top-14 z-10 flex justify-center py-1">
-            <span className="sunken rounded-full border hairline px-3 py-1 text-xs font-medium">
+            <h3 className="sunken rounded-full border hairline px-3 py-1 text-xs font-medium">
               {formatDay(day.date)}
-            </span>
+            </h3>
           </div>
 
           {day.messages.map(({ message, index }) => {
@@ -196,7 +226,7 @@ export function MessageTimeline({
       {messages.length === 0 ? (
         <p className="muted py-10 text-center text-sm">This conversation has no messages.</p>
       ) : (
-        <p className="muted flex items-center justify-center gap-2 py-6 text-xs">
+        <p className="muted flex flex-wrap items-center justify-center gap-2 py-6 text-xs">
           <Badge>{messages.length.toLocaleString('en-US')} messages</Badge>
           <span>
             Times are shown exactly as the export wrote them ({manifest.assumedTimeZone} assumed).

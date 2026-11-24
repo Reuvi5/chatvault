@@ -99,7 +99,11 @@ describe('moving a conversation to the trash', () => {
   });
 
   it('cancels the scheduled purge if the conversation was restored', async () => {
-    const { outcome } = await importFixture(account, { messageCount: 5, seed: 43, withMedia: false });
+    const { outcome } = await importFixture(account, {
+      messageCount: 5,
+      seed: 43,
+      withMedia: false,
+    });
     await account.api.deleteConversation(outcome.conversationId, 'trash');
     await account.api.restoreConversation(outcome.conversationId);
 
@@ -139,7 +143,11 @@ describe('purging', () => {
   });
 
   it('purges trashed objects once the retention window has passed', async () => {
-    const { outcome } = await importFixture(account, { messageCount: 6, seed: 45, withMedia: false });
+    const { outcome } = await importFixture(account, {
+      messageCount: 6,
+      seed: 45,
+      withMedia: false,
+    });
     const store = await getStore();
     const objects = await store.find('objects', { equals: { import_id: outcome.importId } });
     await account.api.deleteConversation(outcome.conversationId, 'trash');

@@ -3,11 +3,7 @@
  */
 import type { ObjectKind } from '@chatvault/protocol';
 import { fromUtf8, toUtf8 } from './bytes';
-import {
-  decryptObject,
-  encryptObject,
-  type ObjectStats,
-} from './objectFormat';
+import { decryptObject, encryptObject, type ObjectStats } from './objectFormat';
 
 export async function encryptJsonObject(options: {
   material: Uint8Array;

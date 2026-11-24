@@ -8,18 +8,7 @@
 const ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'; // Crockford-ish, no i/l/o/u
 
 export type IdPrefix =
-  | 'acc'
-  | 'ses'
-  | 'vlt'
-  | 'cnv'
-  | 'imp'
-  | 'obj'
-  | 'rep'
-  | 'job'
-  | 'evt'
-  | 'bp'
-  | 'usg'
-  | 'idm';
+  'acc' | 'ses' | 'vlt' | 'cnv' | 'imp' | 'obj' | 'rep' | 'job' | 'evt' | 'bp' | 'usg' | 'idm';
 
 function randomBytes(n: number): Uint8Array {
   const out = new Uint8Array(n);

@@ -1,5 +1,9 @@
 'use client';
 
+/* eslint-disable jsx-a11y/no-autofocus --
+   The unlock screen exists to take one value, so focusing that field saves
+   every reader a keystroke and disorients nobody. */
+
 import { useState } from 'react';
 import { Button, Card, Field, Notice, TextInput } from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';

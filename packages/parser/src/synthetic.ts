@@ -40,7 +40,12 @@ function crc32(bytes: Uint8Array): number {
 }
 
 function be32(value: number): Uint8Array {
-  return new Uint8Array([(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff]);
+  return new Uint8Array([
+    (value >>> 24) & 0xff,
+    (value >>> 16) & 0xff,
+    (value >>> 8) & 0xff,
+    value & 0xff,
+  ]);
 }
 
 function pngChunk(type: string, data: Uint8Array): Uint8Array {
@@ -167,6 +172,20 @@ const MEMBERS_GROUP = ['Dana Okonkwo', 'Sam Reyes', 'Priya Raman', 'Tomás Olive
 
 const pad = (value: number, width = 2) => String(value).padStart(width, '0');
 
+/**
+ * Index one of the fixture lists above.
+ *
+ * These lists are ours, so an out-of-range index means the generator is
+ * misconfigured. Failing loudly says that; a type assertion would only hide it.
+ */
+function at<T>(list: readonly T[], index: number): T {
+  const value = list[index];
+  if (value === undefined) {
+    throw new Error(`Fixture list has no entry at index ${String(index)}`);
+  }
+  return value;
+}
+
 function formatDate(
   date: { year: number; month: number; day: number },
   order: 'dmy' | 'mdy',
@@ -227,8 +246,8 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
   const count = options.messageCount ?? 40;
   const random = lcg(options.seed ?? 20_261_117);
   const members = group ? MEMBERS_GROUP : MEMBERS_1TO1;
-  const self = members[0] as string;
-  const title = options.title ?? (group ? 'Lake trip planning' : (members[1] as string));
+  const self = at(members, 0);
+  const title = options.title ?? (group ? 'Lake trip planning' : at(members, 1));
   const start = options.startDate ?? { year: 2026, month: 3, day: 7 };
 
   const mediaFiles: Array<{ name: string; bytes: Uint8Array }> = [];
@@ -249,9 +268,7 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
     };
     const dateText = formatDate(d, order);
     const timeText = formatTime(t, clock, withSeconds);
-    return platform === 'ios'
-      ? `\u200e[${dateText}, ${timeText}] `
-      : `${dateText}, ${timeText} - `;
+    return platform === 'ios' ? `\u200e[${dateText}, ${timeText}] ` : `${dateText}, ${timeText} - `;
   };
 
   const push = (atMs: number, body: string, sender: string | null) => {
@@ -260,7 +277,11 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
   };
 
   // System notices, as an export opens with.
-  push(cursor, 'Messages and calls are end-to-end encrypted. Only people in this chat can read them.', null);
+  push(
+    cursor,
+    'Messages and calls are end-to-end encrypted. Only people in this chat can read them.',
+    null,
+  );
   cursor += 60_000;
   if (group) {
     push(cursor, `${self} created group "${title}"`, null);
@@ -270,7 +291,7 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
   }
 
   for (let i = 0; i < count; i += 1) {
-    const sender = members[Math.floor(random() * members.length)] as string;
+    const sender = at(members, Math.floor(random() * members.length));
     const roll = random();
     cursor += Math.floor(60_000 + random() * 7 * 3_600_000);
 
@@ -325,15 +346,15 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
       continue;
     }
 
-    const body = SMALL_TALK[Math.floor(random() * SMALL_TALK.length)] as string;
+    const body = at(SMALL_TALK, Math.floor(random() * SMALL_TALK.length));
     const edited = random() > 0.9 ? ' <This message was edited>' : '';
     push(cursor, `${body}${edited}`, sender);
   }
 
   // Two messages that are indistinguishable from each other, on purpose.
   cursor += 90_000;
-  push(cursor, 'ok', members[1] as string);
-  push(cursor, 'ok', members[1] as string);
+  push(cursor, 'ok', at(members, 1));
+  push(cursor, 'ok', at(members, 1));
 
   // A document attachment.
   if (withMedia) {
@@ -348,7 +369,7 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
     push(
       cursor,
       platform === 'ios' ? `\u200e<attached: ${docName}>` : `${docName} (file attached)`,
-      members[0] as string,
+      at(members, 0),
     );
   }
 
@@ -388,9 +409,7 @@ export function buildSyntheticExport(options: SyntheticExportOptions = {}): Synt
 }
 
 /** A hostile archive, for the import-safety tests. */
-export function buildMaliciousArchive(
-  variant: 'traversal' | 'bomb' | 'many_entries',
-): Uint8Array {
+export function buildMaliciousArchive(variant: 'traversal' | 'bomb' | 'many_entries'): Uint8Array {
   if (variant === 'traversal') {
     return zipSync({
       '../../etc/passwd': new TextEncoder().encode('root:x:0:0'),

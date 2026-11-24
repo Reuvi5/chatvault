@@ -62,7 +62,9 @@ describe('byteHours', () => {
 
   it('never bills negative storage', () => {
     const start = Date.UTC(2026, 10, 1);
-    expect(byteHours([{ atMs: start, logicalBytes: -5 }], { startMs: start, endMs: start + HOUR })).toBe(0);
+    expect(
+      byteHours([{ atMs: start, logicalBytes: -5 }], { startMs: start, endMs: start + HOUR }),
+    ).toBe(0);
   });
 });
 

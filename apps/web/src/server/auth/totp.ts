@@ -8,7 +8,13 @@
  * The shared secret is stored encrypted with the server key, because the server
  * has to be able to check a code. It has nothing to do with vault keys.
  */
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto';
 import { hkdfSync } from 'node:crypto';
 import { getEnv } from '../env';
 

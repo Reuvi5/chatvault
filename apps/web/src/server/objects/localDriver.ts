@@ -6,7 +6,16 @@
  * completion, so an interrupted upload leaves no half-written object behind.
  */
 import { createReadStream } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { dirname, join } from 'node:path';
 import { ObjectStoreError, assertSafeKey, type ObjectDriver, type ObjectHead } from './driver';
@@ -18,7 +27,13 @@ export class LocalObjectDriver implements ObjectDriver {
     readonly label: string,
     private readonly root: string,
     readonly partSizeBytes: number,
+    /** Simulated round trip, so latency-sensitive behaviour can be tested. */
+    private readonly latencyMs = 0,
   ) {}
+
+  private async delay(): Promise<void> {
+    if (this.latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, this.latencyMs));
+  }
 
   get location(): string {
     return this.root;
@@ -47,6 +62,7 @@ export class LocalObjectDriver implements ObjectDriver {
     partNumber: number,
     bytes: Uint8Array,
   ): Promise<{ etag: string | null }> {
+    await this.delay();
     const directory = this.partsDirectory(key);
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, `${String(partNumber).padStart(6, '0')}.part`), bytes);
@@ -54,6 +70,7 @@ export class LocalObjectDriver implements ObjectDriver {
   }
 
   async completeUpload(key: string): Promise<ObjectHead> {
+    await this.delay();
     const directory = this.partsDirectory(key);
     let names: string[];
     try {
@@ -81,6 +98,7 @@ export class LocalObjectDriver implements ObjectDriver {
   }
 
   async put(key: string, bytes: Uint8Array): Promise<ObjectHead> {
+    await this.delay();
     const target = this.objectPath(key);
     await mkdir(dirname(target), { recursive: true });
     const temporary = `${target}.writing`;
@@ -90,6 +108,7 @@ export class LocalObjectDriver implements ObjectDriver {
   }
 
   async get(key: string): Promise<Uint8Array> {
+    await this.delay();
     try {
       return new Uint8Array(await readFile(this.objectPath(key)));
     } catch (error) {

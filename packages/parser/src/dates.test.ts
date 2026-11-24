@@ -72,7 +72,12 @@ describe('date parsing', () => {
 
 describe('time parsing', () => {
   it('reads 24-hour times with and without seconds', () => {
-    expect(parseTimeField('09:41')).toEqual({ hour: 9, minute: 41, second: 0, precision: 'minute' });
+    expect(parseTimeField('09:41')).toEqual({
+      hour: 9,
+      minute: 41,
+      second: 0,
+      precision: 'minute',
+    });
     expect(parseTimeField('21:41:07')).toEqual({
       hour: 21,
       minute: 41,
@@ -109,7 +114,10 @@ describe('time parsing', () => {
 describe('canonical timestamps', () => {
   it('formats to a sortable, zone-free string', () => {
     expect(
-      formatLocalTs({ year: 2026, month: 3, day: 7 }, { hour: 9, minute: 5, second: 0, precision: 'minute' }),
+      formatLocalTs(
+        { year: 2026, month: 3, day: 7 },
+        { hour: 9, minute: 5, second: 0, precision: 'minute' },
+      ),
     ).toBe('2026-03-07T09:05:00');
   });
 

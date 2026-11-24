@@ -95,7 +95,7 @@ export interface ReadableExportProgress {
 export interface ReadableExport {
   fileName: string;
   bytes: Uint8Array;
-  messageCount: number
+  messageCount: number;
   attachmentCount: number;
   skipped: string[];
 }
@@ -138,7 +138,9 @@ export async function buildReadableExport(options: {
       const loaded = await reader.loadAttachment(attachment);
       entries[safeName(attachment.fileName)] = loaded.bytes;
     } catch (error) {
-      skipped.push(`${attachment.fileName}: ${error instanceof Error ? error.message : 'unreadable'}`);
+      skipped.push(
+        `${attachment.fileName}: ${error instanceof Error ? error.message : 'unreadable'}`,
+      );
     }
     done += 1;
     options.onProgress?.({ phase: 'attachments', done, total: available.length });

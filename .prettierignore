@@ -1,0 +1,13 @@
+node_modules
+.next
+dist
+.data
+fixtures-generated
+package-lock.json
+next-env.d.ts
+
+# The product plan, kept exactly as it was written.
+plan.md
+
+# Not a format Prettier knows.
+.env.example

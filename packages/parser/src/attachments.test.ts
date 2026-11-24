@@ -64,7 +64,11 @@ describe('title inference', () => {
 
   it('falls back to participant names when the file name says nothing', () => {
     expect(
-      inferTitleAndSelf({ sourceFileName: '_chat.txt', participants: ['Dana', 'Sam'], isGroup: false }),
+      inferTitleAndSelf({
+        sourceFileName: '_chat.txt',
+        participants: ['Dana', 'Sam'],
+        isGroup: false,
+      }),
     ).toMatchObject({ title: 'Dana & Sam', confidence: 'assumed' });
     expect(
       inferTitleAndSelf({

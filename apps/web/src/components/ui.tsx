@@ -57,9 +57,7 @@ export function Card({
   className?: string;
   as?: 'div' | 'section' | 'article' | 'li';
 }) {
-  return (
-    <Tag className={cx('surface rounded-card border hairline', className)}>{children}</Tag>
-  );
+  return <Tag className={cx('surface rounded-card border hairline', className)}>{children}</Tag>;
 }
 
 export function Field({
@@ -177,7 +175,15 @@ export function ProgressBar({ value, max = 1 }: { value: number; max?: number })
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
+export function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+}) {
   return (
     <div className="space-y-0.5">
       <dt className="muted text-xs uppercase tracking-wide">{label}</dt>
@@ -202,6 +208,64 @@ export function EmptyState({
       {children ? <div className="muted max-w-md text-sm leading-relaxed">{children}</div> : null}
       {action}
     </div>
+  );
+}
+
+/**
+ * Loading placeholders.
+ *
+ * A shape where the content will be reads better than a spinner, because it
+ * says how much is coming. Marked `aria-hidden`: a screen reader should hear the
+ * live region that accompanies it, not a row of empty boxes.
+ */
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <span aria-hidden="true" className={cx('sunken block animate-pulse rounded-md', className)} />
+  );
+}
+
+export function SkeletonCard() {
+  return (
+    <Card className="space-y-3 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-16" />
+      </div>
+      <Skeleton className="h-3 w-3/4" />
+      <Skeleton className="h-3 w-2/5" />
+    </Card>
+  );
+}
+
+export function SkeletonBubbles({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }, (_, index) => (
+        <div
+          key={index}
+          className={cx('flex px-2', index % 3 === 0 ? 'justify-end' : 'justify-start')}
+        >
+          <Skeleton
+            className={cx(
+              'h-12 rounded-2xl',
+              index % 4 === 0 ? 'w-64' : index % 3 === 0 ? 'w-48' : 'w-56',
+            )}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Announces changing status to a screen reader without showing anything.
+ * Use alongside a visible spinner or progress bar, not instead of one.
+ */
+export function LiveStatus({ children }: { children: ReactNode }) {
+  return (
+    <span className="sr-only" role="status" aria-live="polite">
+      {children}
+    </span>
   );
 }
 

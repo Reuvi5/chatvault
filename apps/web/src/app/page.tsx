@@ -57,8 +57,8 @@ export default function LandingPage() {
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Pricing</h2>
         <p className="muted max-w-2xl text-sm leading-relaxed">
-          {formatUsd(PRICE_USD_PER_GB_MONTH)} per gigabyte of archive per month, measured by the hour
-          and billed once for your data rather than once per copy. A gigabyte means{' '}
+          {formatUsd(PRICE_USD_PER_GB_MONTH)} per gigabyte of archive per month, measured by the
+          hour and billed once for your data rather than once per copy. A gigabyte means{' '}
           {BYTES_PER_GB.toLocaleString('en-US')} bytes. There is no minimum charge.
         </p>
         <div className="surface overflow-hidden rounded-card border hairline">
@@ -88,24 +88,24 @@ export default function LandingPage() {
         <ul className="muted max-w-2xl space-y-2 text-sm leading-relaxed">
           <li>
             It is not a messaging app. You cannot send or receive messages here, and nothing is
-            synced from any account automatically — you export a conversation yourself and import the
-            file.
+            synced from any account automatically — you export a conversation yourself and import
+            the file.
           </li>
           <li>
             It cannot put an archive back into the app it came from, and it does not work around any
             export restriction, including choices other people in a chat have made.
           </li>
           <li>
-            It is not a substitute for your own copy. Keep your original export until you have opened
-            the archive here and confirmed it reads correctly.
+            It is not a substitute for your own copy. Keep your original export until you have
+            opened the archive here and confirmed it reads correctly.
           </li>
         </ul>
       </section>
 
       <footer className="muted border-t hairline pt-6 text-xs leading-relaxed">
         <p>
-          ChatVault is an independent product and is not affiliated with, endorsed by or connected to
-          WhatsApp, Meta or any other messaging provider.
+          ChatVault is an independent product and is not affiliated with, endorsed by or connected
+          to WhatsApp, Meta or any other messaging provider.
         </p>
         <p className="mt-2">
           Strong encryption protects your data from the people running this service and from the

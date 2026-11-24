@@ -122,7 +122,7 @@ export function formatUsd(usd: number): string {
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'kB', 'MB', 'GB', 'TB', 'PB'];
+  const units = ['B', 'kB', 'MB', 'GB', 'TB', 'PB'] as const;
   let index = 0;
   let value = bytes;
   while (value >= 1000 && index < units.length - 1) {
@@ -130,7 +130,8 @@ export function formatBytes(bytes: number): string {
     index += 1;
   }
   const digits = value < 10 && index > 0 ? 2 : index === 0 ? 0 : 1;
-  return `${value.toFixed(digits)} ${units[index]}`;
+  const unit: string = units[index] ?? 'B';
+  return `${value.toFixed(digits)} ${unit}`;
 }
 
 export interface UsageQuote {

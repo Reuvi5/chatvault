@@ -77,7 +77,9 @@ const TITLE_PATTERNS: RegExp[] = [
 
 /** Guess a conversation title from the export's own file name. */
 export function titleFromFileName(fileName: string): string | null {
-  const stem = baseName(fileName).replace(/\.(zip|txt)$/iu, '').trim();
+  const stem = baseName(fileName)
+    .replace(/\.(zip|txt)$/iu, '')
+    .trim();
   if (stem === '' || stem === '_chat') return null;
   for (const pattern of TITLE_PATTERNS) {
     const match = pattern.exec(stem);

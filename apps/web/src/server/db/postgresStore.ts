@@ -14,8 +14,22 @@
  * so no caller can inject SQL through a column name or a value.
  */
 import { Pool, type PoolClient } from 'pg';
-import { SERVICE_SCOPE, validateFilter, type Filter, type FindOptions, type Store } from './store';
-import { SCHEMA, SERVICE_SCOPE_VALUE, assertColumn, columnsOf, type RowOf, type TableName } from './schema';
+import {
+  SERVICE_SCOPE,
+  validateFilter,
+  type Filter,
+  type FilterValue,
+  type FindOptions,
+  type Store,
+} from './store';
+import {
+  SCHEMA,
+  SERVICE_SCOPE_VALUE,
+  assertColumn,
+  columnsOf,
+  type RowOf,
+  type TableName,
+} from './schema';
 
 interface WhereClause {
   text: string;
@@ -67,6 +81,22 @@ function buildWhere<T extends TableName>(
   for (const column of filter.isNotNull ?? []) parts.push(`${column} IS NOT NULL`);
 
   return { text: parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '', values };
+}
+
+/**
+ * Validate a patch against the schema and return it as typed column/value
+ * pairs, so neither the column list nor the bound values are `any`.
+ */
+function patchEntries<T extends TableName>(
+  table: T,
+  patch: Partial<RowOf<T>>,
+): Array<[string, FilterValue]> {
+  const out: Array<[string, FilterValue]> = [];
+  for (const [column, value] of Object.entries(patch) as Array<[string, unknown]>) {
+    assertColumn(table, column);
+    out.push([column, (value ?? null) as FilterValue]);
+  }
+  return out;
 }
 
 /** Postgres returns BIGINT as a string to avoid precision loss; convert back. */
@@ -136,7 +166,9 @@ export class PostgresStore implements Store {
 
   async get<T extends TableName>(table: T, identifier: string): Promise<RowOf<T> | null> {
     return this.withClient(async (client) => {
-      const result = await client.query(`SELECT * FROM ${table} WHERE id = $1 LIMIT 1`, [identifier]);
+      const result = await client.query(`SELECT * FROM ${table} WHERE id = $1 LIMIT 1`, [
+        identifier,
+      ]);
       const row = result.rows[0] as Record<string, unknown> | undefined;
       return row ? coerceRow(table, row) : null;
     });
@@ -149,8 +181,10 @@ export class PostgresStore implements Store {
       assertColumn(table, options.orderBy.column);
       sql += ` ORDER BY ${options.orderBy.column} ${options.orderBy.direction === 'desc' ? 'DESC' : 'ASC'}`;
     }
-    if (options?.limit !== undefined) sql += ` LIMIT ${String(Math.max(0, Math.floor(options.limit)))}`;
-    if (options?.offset !== undefined) sql += ` OFFSET ${String(Math.max(0, Math.floor(options.offset)))}`;
+    if (options?.limit !== undefined)
+      sql += ` LIMIT ${String(Math.max(0, Math.floor(options.limit)))}`;
+    if (options?.offset !== undefined)
+      sql += ` OFFSET ${String(Math.max(0, Math.floor(options.offset)))}`;
     return this.withClient(async (client) => {
       const result = await client.query(sql, where.values);
       return (result.rows as Record<string, unknown>[]).map((row) => coerceRow(table, row));
@@ -170,14 +204,13 @@ export class PostgresStore implements Store {
     identifier: string,
     patch: Partial<RowOf<T>>,
   ): Promise<boolean> {
-    const entries = Object.entries(patch);
+    const entries = patchEntries(table, patch);
     if (entries.length === 0) return true;
-    for (const [column] of entries) assertColumn(table, column);
     const assignments = entries.map(([column], index) => `${column} = $${String(index + 2)}`);
     return this.withClient(async (client) => {
       const result = await client.query(
         `UPDATE ${table} SET ${assignments.join(', ')} WHERE id = $1`,
-        [identifier, ...entries.map(([, value]) => value ?? null)],
+        [identifier, ...entries.map(([, value]) => value)],
       );
       return (result.rowCount ?? 0) > 0;
     });
@@ -188,15 +221,14 @@ export class PostgresStore implements Store {
     filter: Filter<RowOf<T>>,
     patch: Partial<RowOf<T>>,
   ): Promise<number> {
-    const entries = Object.entries(patch);
+    const entries = patchEntries(table, patch);
     if (entries.length === 0) return 0;
-    for (const [column] of entries) assertColumn(table, column);
     const assignments = entries.map(([column], index) => `${column} = $${String(index + 1)}`);
     const where = buildWhere(table, filter, entries.length + 1);
     return this.withClient(async (client) => {
       const result = await client.query(
         `UPDATE ${table} SET ${assignments.join(', ')}${where.text}`,
-        [...entries.map(([, value]) => value ?? null), ...where.values],
+        [...entries.map(([, value]) => value), ...where.values],
       );
       return result.rowCount ?? 0;
     });
@@ -220,7 +252,10 @@ export class PostgresStore implements Store {
   async count<T extends TableName>(table: T, filter?: Filter<RowOf<T>>): Promise<number> {
     const where = buildWhere(table, filter);
     return this.withClient(async (client) => {
-      const result = await client.query(`SELECT COUNT(*)::BIGINT AS value FROM ${table}${where.text}`, where.values);
+      const result = await client.query(
+        `SELECT COUNT(*)::BIGINT AS value FROM ${table}${where.text}`,
+        where.values,
+      );
       return Number((result.rows[0] as { value: string }).value);
     });
   }
@@ -273,9 +308,11 @@ export class PostgresStore implements Store {
   async assertRowLevelSecurity(): Promise<void> {
     const client = await this.pool.connect();
     try {
-      const role = await client.query<{ rolsuper: boolean; rolbypassrls: boolean; rolname: string }>(
-        'SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user',
-      );
+      const role = await client.query<{
+        rolsuper: boolean;
+        rolbypassrls: boolean;
+        rolname: string;
+      }>('SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user');
       const row = role.rows[0];
       if (!row) throw new Error('Could not determine the current database role.');
       if (row.rolsuper || row.rolbypassrls) {

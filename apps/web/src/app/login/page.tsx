@@ -66,7 +66,11 @@ export default function LoginPage() {
             />
           </Field>
           {needsTotp ? (
-            <Field label="Authenticator code" id="totp" hint="Six digits from your authenticator app.">
+            <Field
+              label="Authenticator code"
+              id="totp"
+              hint="Six digits from your authenticator app."
+            >
               <TextInput
                 id="totp"
                 inputMode="numeric"

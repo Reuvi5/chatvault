@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { concat, toHex } from './bytes';
-import {
-  AuthenticationError,
-  nonceForFrame,
-  randomBytes,
-  sha256Hex,
-} from './primitives';
+import { AuthenticationError, nonceForFrame, randomBytes, sha256Hex } from './primitives';
 import {
   ObjectReader,
   ObjectWriter,
@@ -89,7 +84,11 @@ describe('round trips', () => {
       for (let i = 0; i < bytes.length; i += 97) yield bytes.subarray(i, i + 97);
     }
     const pieces: Uint8Array[] = [];
-    for await (const piece of decryptObjectStream({ material, source: source(), expectedObjectId: objectId })) {
+    for await (const piece of decryptObjectStream({
+      material,
+      source: source(),
+      expectedObjectId: objectId,
+    })) {
       pieces.push(piece);
     }
     expect(toHex(concat(pieces))).toBe(toHex(data));
@@ -97,7 +96,13 @@ describe('round trips', () => {
 
   it('accepts one byte at a time', async () => {
     const data = randomBytes(300);
-    const { bytes } = await encryptObject({ material, objectId, kind: 'media', data, frameSize: 1024 });
+    const { bytes } = await encryptObject({
+      material,
+      objectId,
+      kind: 'media',
+      data,
+      frameSize: 1024,
+    });
     const reader = new ObjectReader({ material, expectedObjectId: objectId });
     const pieces: Uint8Array[] = [];
     for (const byte of bytes) {
@@ -179,7 +184,11 @@ describe('tamper detection', () => {
     const header = pieces[0] as Uint8Array;
     const frames: Uint8Array[][] = [];
     for (let i = 1; i < pieces.length; i += 3) {
-      frames.push([pieces[i] as Uint8Array, pieces[i + 1] as Uint8Array, pieces[i + 2] as Uint8Array]);
+      frames.push([
+        pieces[i] as Uint8Array,
+        pieces[i + 1] as Uint8Array,
+        pieces[i + 2] as Uint8Array,
+      ]);
     }
     expect(frames.length).toBeGreaterThanOrEqual(3);
     const swapped = [frames[1] as Uint8Array[], frames[0] as Uint8Array[], ...frames.slice(2)];
@@ -193,7 +202,10 @@ describe('tamper detection', () => {
     const header = pieces[0] as Uint8Array;
     const firstFrame = pieces.slice(1, 4);
     await expect(
-      decryptObject({ material, bytes: concat([header, ...firstFrame, ...firstFrame, ...pieces.slice(4)]) }),
+      decryptObject({
+        material,
+        bytes: concat([header, ...firstFrame, ...firstFrame, ...pieces.slice(4)]),
+      }),
     ).rejects.toThrow(AuthenticationError);
   });
 
@@ -214,7 +226,10 @@ describe('tamper detection', () => {
     const header = pieces[0] as Uint8Array;
     const bogusLength = new Uint8Array([0x00, 0x7f, 0xff, 0xff]);
     await expect(
-      decryptObject({ material, bytes: concat([header, bogusLength, new Uint8Array([1]), randomBytes(64)]) }),
+      decryptObject({
+        material,
+        bytes: concat([header, bogusLength, new Uint8Array([1]), randomBytes(64)]),
+      }),
     ).rejects.toThrow(/out of range|larger than/i);
   });
 });

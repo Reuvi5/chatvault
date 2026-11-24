@@ -149,9 +149,13 @@ export async function withIdempotency<T>(
 }
 
 /** Housekeeping, called by the worker. */
-export async function purgeExpiredSecurityRows(store: Store): Promise<{ sessions: number; keys: number }> {
+export async function purgeExpiredSecurityRows(
+  store: Store,
+): Promise<{ sessions: number; keys: number }> {
   const now = Date.now();
-  const sessions = await store.removeWhere('sessions', { lessThan: { column: 'expires_at_ms', value: now } });
+  const sessions = await store.removeWhere('sessions', {
+    lessThan: { column: 'expires_at_ms', value: now },
+  });
   const keys = await store.removeWhere('idempotency_keys', {
     lessThan: { column: 'expires_at_ms', value: now },
   });

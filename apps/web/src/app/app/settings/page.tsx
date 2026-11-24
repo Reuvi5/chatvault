@@ -3,15 +3,7 @@
 import { useState } from 'react';
 import { assessPassphrase } from '@chatvault/crypto';
 import { ApiRequestError } from '@chatvault/client';
-import {
-  Badge,
-  Button,
-  Card,
-  CopyBlock,
-  Field,
-  Notice,
-  TextInput,
-} from '@/components/ui';
+import { Badge, Button, Card, CopyBlock, Field, Notice, TextInput } from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';
 
 export default function SettingsPage() {

@@ -6,25 +6,25 @@ exercised by a test or the drill.
 
 ## §4 MVP — required
 
-| Item | State | Where / note |
-| --- | --- | --- |
-| Email signup/login and MFA/passkey path | **Done** (TOTP) | `handlers/auth.ts`, `auth/totp.ts`. WebAuthn passkeys deferred. |
-| Recovery-key generation and confirmation | **Done** | `crypto/recoveryKey.ts`, `components/SetupVault.tsx`; typed acknowledgement before continuing. |
-| Local `.txt` and `.zip` import, iOS/Android detection | **Done** | `parser/transcript.ts`, `parser/archive.ts`; 28 parser tests. |
-| Parser: dates, senders, groups, multiline, system events | **Done** | Same, plus locale and ambiguity handling with reported confidence. |
-| Media matching and integrity validation | **Done** | `parser/attachments.ts`; plaintext digests per attachment in the manifest. |
-| Client-side encryption before upload | **Done** | `crypto/objectFormat.ts`; the drill greps stored data for plaintext. |
-| Resumable upload of encrypted data | **Partly** | Parts are addressed individually and retried with backoff. Resume across a page reload is deferred. |
-| Primary R2, secondary B2 replication | **Done** | S3 driver per provider; local drivers for development and tests. |
-| Import status: imported, backed up, verified | **Done** | `/app/imports/[id]`; `archiveVerified` requires both copies and a readable index. |
-| Chat list, timeline, images, video, audio, documents | **Done** | `components/MessageTimeline.tsx`, `components/Attachment.tsx`. |
-| Local decrypted search after unlock | **Done** | `client/search.ts`; in-memory index, phrases, sender/date/attachment filters. |
-| Re-import deduplication and preview | **Done** | `parser/merge.ts` with 16 tests; preview shown before upload. |
-| Per-user usage and projected charges | **Done** | `services/metering.ts`, `/app/usage`; 10 metering tests. |
-| Stripe subscription / usage billing | **Done, gated** | `services/billing.ts`: metered GB-months, signed webhooks. Needs real keys and a price. |
-| Downloadable archive and tested restore | **Partly** | Readable per-conversation export, round-trip tested; restore proven by `npm run drill:restore`. A ciphertext archive download with an offline reader is deferred. |
-| Account deletion and archive deletion flow | **Done** | `services/deletion.ts`; 7 deletion tests including a full account purge. |
-| Responsive mobile web | **Done** | Layouts are mobile-first; not yet tested on real devices. |
+| Item                                                     | State           | Where / note                                                                                                                                                      |
+| -------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email signup/login and MFA/passkey path                  | **Done** (TOTP) | `handlers/auth.ts`, `auth/totp.ts`. WebAuthn passkeys deferred.                                                                                                   |
+| Recovery-key generation and confirmation                 | **Done**        | `crypto/recoveryKey.ts`, `components/SetupVault.tsx`; typed acknowledgement before continuing.                                                                    |
+| Local `.txt` and `.zip` import, iOS/Android detection    | **Done**        | `parser/transcript.ts`, `parser/archive.ts`; 28 parser tests.                                                                                                     |
+| Parser: dates, senders, groups, multiline, system events | **Done**        | Same, plus locale and ambiguity handling with reported confidence.                                                                                                |
+| Media matching and integrity validation                  | **Done**        | `parser/attachments.ts`; plaintext digests per attachment in the manifest.                                                                                        |
+| Client-side encryption before upload                     | **Done**        | `crypto/objectFormat.ts`; the drill greps stored data for plaintext.                                                                                              |
+| Resumable upload of encrypted data                       | **Partly**      | Parts are addressed individually and retried with backoff. Resume across a page reload is deferred.                                                               |
+| Primary R2, secondary B2 replication                     | **Done**        | S3 driver per provider; local drivers for development and tests.                                                                                                  |
+| Import status: imported, backed up, verified             | **Done**        | `/app/imports/[id]`; `archiveVerified` requires both copies and a readable index.                                                                                 |
+| Chat list, timeline, images, video, audio, documents     | **Done**        | `components/MessageTimeline.tsx`, `components/Attachment.tsx`.                                                                                                    |
+| Local decrypted search after unlock                      | **Done**        | `client/search.ts`; in-memory index, phrases, sender/date/attachment filters.                                                                                     |
+| Re-import deduplication and preview                      | **Done**        | `parser/merge.ts` with 16 tests; preview shown before upload.                                                                                                     |
+| Per-user usage and projected charges                     | **Done**        | `services/metering.ts`, `/app/usage`; 10 metering tests.                                                                                                          |
+| Stripe subscription / usage billing                      | **Done, gated** | `services/billing.ts`: metered GB-months, signed webhooks. Needs real keys and a price.                                                                           |
+| Downloadable archive and tested restore                  | **Partly**      | Readable per-conversation export, round-trip tested; restore proven by `npm run drill:restore`. A ciphertext archive download with an offline reader is deferred. |
+| Account deletion and archive deletion flow               | **Done**        | `services/deletion.ts`; 7 deletion tests including a full account purge.                                                                                          |
+| Responsive mobile web                                    | **Done**        | Layouts are mobile-first; not yet tested on real devices.                                                                                                         |
 
 ## §4 Later versions
 
@@ -33,66 +33,69 @@ encrypted search indexes, batch import, client-side semantic search, a media
 gallery, an offline encrypted cache, device-to-device key recovery, family or
 shared archives, downloadable integrity proofs.
 
-Two notes. The crypto layer reserves an `index` subkey purpose so a persistent
-encrypted index does not need a format change. Shared archives would need key
-sharing designed from scratch; nothing in the current model assumes a second
-reader, which is the right starting point.
+Two notes. The reserved `index` subkey is now in use, for an encrypted on-device
+cache of decrypted conversations — which is half of "more sophisticated
+encrypted local search indexes": repeat visits no longer re-fetch and re-decrypt
+every page, but the search index itself is still rebuilt in memory each session
+rather than persisted. Shared archives would need key sharing designed from
+scratch; nothing in the current model assumes a second reader, which is the
+right starting point.
 
 ## §5 Architecture
 
-| Item | State |
-| --- | --- |
-| Client parses, normalises, deduplicates, encrypts locally | Done |
-| Ciphertext-only to the server | Done, enforced by the request schemas |
-| R2 primary with verified replication to B2 | Done |
-| Postgres with account ids, object pointers, statuses, usage ledger | Done, `db/schema.ts` |
-| **No plaintext messages in Postgres** | Done: there is no column that could hold one |
-| Versioned encrypted chunks/manifests in object storage | Done, `CVOBJ01` + versioned manifests |
-| All ten suggested tables | Done, plus `upload_sessions` for resumable uploads |
-| Strict owner-based row-level security on every exposed table | Done, generated from the schema, with a startup check |
-| Provider secrets kept off the browser | Done: uploads and downloads go through the API with scoped tickets |
+| Item                                                               | State                                                              |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Client parses, normalises, deduplicates, encrypts locally          | Done                                                               |
+| Ciphertext-only to the server                                      | Done, enforced by the request schemas                              |
+| R2 primary with verified replication to B2                         | Done                                                               |
+| Postgres with account ids, object pointers, statuses, usage ledger | Done, `db/schema.ts`                                               |
+| **No plaintext messages in Postgres**                              | Done: there is no column that could hold one                       |
+| Versioned encrypted chunks/manifests in object storage             | Done, `CVOBJ01` + versioned manifests                              |
+| All ten suggested tables                                           | Done, plus `upload_sessions` for resumable uploads                 |
+| Strict owner-based row-level security on every exposed table       | Done, generated from the schema, with a startup check              |
+| Provider secrets kept off the browser                              | Done: uploads and downloads go through the API with scoped tickets |
 
 ## §6 Encryption and privacy
 
-| Item | State |
-| --- | --- |
-| Random vault master key, locally generated | Done |
-| Argon2id with per-user salt and calibrated parameters | Done — 64 MiB / 3 / 1, stored per vault |
-| Store only the wrapped key and non-secret KDF metadata | Done |
-| Independent data keys per object | Done — HKDF per object with a random salt |
-| Audited AEAD with guaranteed nonce uniqueness | Done — AES-256-GCM, per-object keys, counter nonces, immutable objects |
-| Encrypt bodies, attachments, names and manifests | Done |
-| Authenticate identifiers, versions and metadata as AAD | Done |
-| Validate tags and checksums on read and restore | Done, plus plaintext digests to catch rollback |
-| Offline recovery key with documented consequences | Done |
-| Cryptographic architecture review before real data | **Not done — a launch gate** |
-| Streaming encryption, bounded memory, ZIP-bomb limits, resumable uploads | Done |
-| Metadata minimisation | Done — random ids, no names in keys, no message timestamps server-side |
-| No plaintext in logs, analytics or telemetry | Done — redacting logger, no analytics at all |
-| Avoid cross-user deduplication | Done — never implemented |
-| Short-lived scoped upload/download authorizations | Done — signed tickets |
-| Tight CSP, pinned dependencies, minimal third-party JS | Done — nonce CSP, zero third-party script |
-| Do not claim to be impossible to compromise | Done — stated on the landing page and in `SECURITY.md` |
-| Privacy policy, retention terms, legal review | **Not done — launch gates** |
-| No model training, no targeted advertising on content | Done — no code path can read content |
+| Item                                                                     | State                                                                  |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Random vault master key, locally generated                               | Done                                                                   |
+| Argon2id with per-user salt and calibrated parameters                    | Done — 64 MiB / 3 / 1, stored per vault                                |
+| Store only the wrapped key and non-secret KDF metadata                   | Done                                                                   |
+| Independent data keys per object                                         | Done — HKDF per object with a random salt                              |
+| Audited AEAD with guaranteed nonce uniqueness                            | Done — AES-256-GCM, per-object keys, counter nonces, immutable objects |
+| Encrypt bodies, attachments, names and manifests                         | Done                                                                   |
+| Authenticate identifiers, versions and metadata as AAD                   | Done                                                                   |
+| Validate tags and checksums on read and restore                          | Done, plus plaintext digests to catch rollback                         |
+| Offline recovery key with documented consequences                        | Done                                                                   |
+| Cryptographic architecture review before real data                       | **Not done — a launch gate**                                           |
+| Streaming encryption, bounded memory, ZIP-bomb limits, resumable uploads | Done                                                                   |
+| Metadata minimisation                                                    | Done — random ids, no names in keys, no message timestamps server-side |
+| No plaintext in logs, analytics or telemetry                             | Done — redacting logger, no analytics at all                           |
+| Avoid cross-user deduplication                                           | Done — never implemented                                               |
+| Short-lived scoped upload/download authorizations                        | Done — signed tickets                                                  |
+| Tight CSP, pinned dependencies, minimal third-party JS                   | Done — nonce CSP, zero third-party script                              |
+| Do not claim to be impossible to compromise                              | Done — stated on the landing page and in `SECURITY.md`                 |
+| Privacy policy, retention terms, legal review                            | **Not done — launch gates**                                            |
+| No model training, no targeted advertising on content                    | Done — no code path can read content                                   |
 
 ## §7 Backup and recovery
 
-| Item | State |
-| --- | --- |
-| Two independent encrypted copies | Done |
-| Separate credentials per provider | Done, and identical keys are refused in production |
-| Ciphertext-only replication | Done |
-| Durable idempotent worker with retries and a dead-letter state | Done |
-| Verify source checksums, remote checksums, counts | Done |
-| Encrypted metadata backups; media alone is not a restore plan | Partly — enforced in the verification rule; Postgres backups are an operator task, documented |
-| Retention/versioning against accidental deletion | Done in policy (trash window, no mirrored deletes); bucket versioning is an operator task |
-| Consistent deletion policy reconciled with backups | Done |
-| Automated restore exercises and sampling | Done — `drill:restore`, plus scheduled reconciliation in the worker |
-| Never mirror deletions immediately | Done |
-| Object retention/immutability controls | Operator task, documented |
-| Service targets table | Implemented as behaviour: verified only after two verified copies and a recoverable index; RPO bounded by replication, which runs every minute. **No recovery time objective is promised**, as the plan asks. |
-| Never encourage deleting an original until verified | Done — the interface says the opposite throughout |
+| Item                                                           | State                                                                                                                                                                                                         |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two independent encrypted copies                               | Done                                                                                                                                                                                                          |
+| Separate credentials per provider                              | Done, and identical keys are refused in production                                                                                                                                                            |
+| Ciphertext-only replication                                    | Done                                                                                                                                                                                                          |
+| Durable idempotent worker with retries and a dead-letter state | Done                                                                                                                                                                                                          |
+| Verify source checksums, remote checksums, counts              | Done                                                                                                                                                                                                          |
+| Encrypted metadata backups; media alone is not a restore plan  | Partly — enforced in the verification rule; Postgres backups are an operator task, documented                                                                                                                 |
+| Retention/versioning against accidental deletion               | Done in policy (trash window, no mirrored deletes); bucket versioning is an operator task                                                                                                                     |
+| Consistent deletion policy reconciled with backups             | Done                                                                                                                                                                                                          |
+| Automated restore exercises and sampling                       | Done — `drill:restore`, plus scheduled reconciliation in the worker                                                                                                                                           |
+| Never mirror deletions immediately                             | Done                                                                                                                                                                                                          |
+| Object retention/immutability controls                         | Operator task, documented                                                                                                                                                                                     |
+| Service targets table                                          | Implemented as behaviour: verified only after two verified copies and a recoverable index; RPO bounded by replication, which runs every minute. **No recovery time objective is promised**, as the plan asks. |
+| Never encourage deleting an original until verified            | Done — the interface says the opposite throughout                                                                                                                                                             |
 
 ## §8 Import and deduplication
 
@@ -135,14 +138,14 @@ does not know about.
 
 ## §11 Roadmap
 
-| Milestone | State |
-| --- | --- |
-| 0 — research and architecture | Done: synthetic fixtures, local parsing and playback, written threat model and crypto spec, two-provider design, cost model, interface built |
-| 1 — secure single-user prototype | Done, and its "done when" is the restore drill |
-| 2 — robustness and polished viewer | Done, except full virtualisation (see `ARCHITECTURE.md` for why) and cross-reload resume |
-| 3 — independent backup and verification | Done: replication, failover reads, retention, reconciliation, dead-letter |
-| 4 — billing and multi-tenancy | Done: RLS, usage ledger, quotas, Stripe, cross-tenant tests. Load testing and a margin review are outstanding |
-| 5 — private beta and launch | **Not started.** Needs the audit, legal review, real-provider drills and accessibility pass in `SECURITY.md` |
+| Milestone                               | State                                                                                                                                        |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — research and architecture           | Done: synthetic fixtures, local parsing and playback, written threat model and crypto spec, two-provider design, cost model, interface built |
+| 1 — secure single-user prototype        | Done, and its "done when" is the restore drill                                                                                               |
+| 2 — robustness and polished viewer      | Done, except full virtualisation (see `ARCHITECTURE.md` for why) and cross-reload resume                                                     |
+| 3 — independent backup and verification | Done: replication, failover reads, retention, reconciliation, dead-letter                                                                    |
+| 4 — billing and multi-tenancy           | Done: RLS, usage ledger, quotas, Stripe, cross-tenant tests. Load testing and a margin review are outstanding                                |
+| 5 — private beta and launch             | **Not started.** Needs the audit, legal review, real-provider drills and accessibility pass in `SECURITY.md`                                 |
 
 ## §12 Success metrics
 

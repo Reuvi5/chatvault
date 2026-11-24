@@ -112,7 +112,8 @@ export async function restoreConversation(
 
   for (const object of objects) {
     const replicas = await store.find('replicas', { equals: { object_id: object.id } });
-    const verified = replicas.length >= 2 && replicas.every((replica) => replica.state === 'verified');
+    const verified =
+      replicas.length >= 2 && replicas.every((replica) => replica.state === 'verified');
     await store.update('objects', object.id, {
       state: verified ? 'verified' : 'primary_stored',
       trashed_at_ms: null,
@@ -220,7 +221,9 @@ export async function requestAccountDeletion(
   await recordAudit(store, {
     accountId: account.id,
     kind: 'account.deletion_requested',
-    detail: purgeImmediately ? 'immediate purge requested' : `purge scheduled for ${new Date(executeAfterMs).toISOString()}`,
+    detail: purgeImmediately
+      ? 'immediate purge requested'
+      : `purge scheduled for ${new Date(executeAfterMs).toISOString()}`,
   });
   return { executeAfterMs };
 }
@@ -298,7 +301,10 @@ export async function runDeletionJobs(
             state: result.objectsFailed === 0 ? 'completed' : 'failed',
             objects_purged: result.objectsPurged,
             completed_at_ms: now,
-            last_error: result.objectsFailed === 0 ? null : `${String(result.objectsFailed)} objects could not be removed`,
+            last_error:
+              result.objectsFailed === 0
+                ? null
+                : `${String(result.objectsFailed)} objects could not be removed`,
           });
         } else {
           const removed = await purgeAccount(tx, job.target_id);

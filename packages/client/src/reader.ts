@@ -88,7 +88,11 @@ export class ArchiveReader {
         continue;
       }
       try {
-        entries.push({ summary, manifest: await this.loadManifest(summary.manifestObjectId), error: null });
+        entries.push({
+          summary,
+          manifest: await this.loadManifest(summary.manifestObjectId),
+          error: null,
+        });
       } catch (error) {
         entries.push({
           summary,
@@ -133,7 +137,10 @@ export class ArchiveReader {
   /** Load the whole conversation, page by page, reporting progress. */
   async loadMessages(
     manifest: ConversationManifest,
-    options: { onProgress?: (pagesDone: number, pagesTotal: number) => void; signal?: AbortSignal } = {},
+    options: {
+      onProgress?: (pagesDone: number, pagesTotal: number) => void;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<CanonicalMessage[]> {
     const out: CanonicalMessage[] = [];
     for (const [index, page] of manifest.pages.entries()) {
@@ -141,14 +148,18 @@ export class ArchiveReader {
       out.push(...(await this.loadPage(page)));
       options.onProgress?.(index + 1, manifest.pages.length);
     }
-    return out.map((message, index) => (message.seq === index ? message : { ...message, seq: index }));
+    return out.map((message, index) =>
+      message.seq === index ? message : { ...message, seq: index },
+    );
   }
 
   async loadAttachment(
     attachment: ManifestAttachmentRef,
   ): Promise<{ bytes: Uint8Array; mimeType: string }> {
     if (!attachment.objectId || attachment.missing) {
-      throw new Error(`${attachment.fileName} was not included in the export, so it is not archived.`);
+      throw new Error(
+        `${attachment.fileName} was not included in the export, so it is not archived.`,
+      );
     }
     const bytes = await this.fetchObject(attachment.objectId);
     const plaintext = await decryptObject({

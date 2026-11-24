@@ -176,7 +176,8 @@ describe('awkward real-world cases', () => {
 
   it('stops at the message cap', () => {
     const lines: string[] = [];
-    for (let i = 0; i < 50; i += 1) lines.push(`17/11/2026, 09:${String(i % 60).padStart(2, '0')} - Dana: ${String(i)}`);
+    for (let i = 0; i < 50; i += 1)
+      lines.push(`17/11/2026, 09:${String(i % 60).padStart(2, '0')} - Dana: ${String(i)}`);
     const parsed = parseTranscript(lines.join('\n'), { maxMessages: 10 });
     expect(parsed.counts.total).toBe(10);
   });

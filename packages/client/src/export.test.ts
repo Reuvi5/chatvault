@@ -29,7 +29,12 @@ describe('the readable export round-trips through our own parser', () => {
   });
 
   it('is recognised as a duplicate if it is imported back into the same archive', () => {
-    const fixture = buildSyntheticExport({ platform: 'ios', withMedia: false, messageCount: 40, seed: 52 });
+    const fixture = buildSyntheticExport({
+      platform: 'ios',
+      withMedia: false,
+      messageCount: 40,
+      seed: 52,
+    });
     const archived = parseTranscript(fixture.transcript).messages;
     const reimported = parseTranscript(renderTranscript(archived)).messages;
 

@@ -112,14 +112,14 @@ so change them before anyone imports anything real, or not at all.
 
 ## Decisions the plan had already made, and where they live
 
-| Decision | Where |
-| --- | --- |
-| $0.05 per logical GB-month | `packages/protocol/src/pricing.ts`, tested against the plan's own table |
-| Encrypt on the device before upload | `packages/crypto`, `packages/client/src/importer.ts` |
-| Zero-knowledge: no plaintext or keys for the operator | enforced by the API schemas; checked by the drill's plaintext grep |
-| Two independent encrypted copies | `services/replication.ts`, `objects/*` |
-| A familiar chat browsing experience | `components/MessageTimeline.tsx` |
-| Manual exports only; no account sync | there is no code that touches a messaging account |
-| Primary R2, secondary B2 | the S3 driver, configured per provider |
-| Next.js + TypeScript + React, Supabase-style Postgres | `apps/web`, `db/postgresStore.ts` |
-| Single-user private archive, multi-tenant underneath | one vault per account; no sharing anywhere |
+| Decision                                              | Where                                                                   |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| $0.05 per logical GB-month                            | `packages/protocol/src/pricing.ts`, tested against the plan's own table |
+| Encrypt on the device before upload                   | `packages/crypto`, `packages/client/src/importer.ts`                    |
+| Zero-knowledge: no plaintext or keys for the operator | enforced by the API schemas; checked by the drill's plaintext grep      |
+| Two independent encrypted copies                      | `services/replication.ts`, `objects/*`                                  |
+| A familiar chat browsing experience                   | `components/MessageTimeline.tsx`                                        |
+| Manual exports only; no account sync                  | there is no code that touches a messaging account                       |
+| Primary R2, secondary B2                              | the S3 driver, configured per provider                                  |
+| Next.js + TypeScript + React, Supabase-style Postgres | `apps/web`, `db/postgresStore.ts`                                       |
+| Single-user private archive, multi-tenant underneath  | one vault per account; no sharing anywhere                              |

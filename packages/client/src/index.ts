@@ -3,5 +3,7 @@ export * from './bytes';
 export * from './cache';
 export * from './importer';
 export * from './export';
+export * from './messageCache';
+export * from './pool';
 export * from './reader';
 export * from './search';

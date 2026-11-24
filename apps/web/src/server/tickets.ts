@@ -68,7 +68,8 @@ export function verifyTicket(
   }
 
   if (claims.v !== 1) throw forbidden('That authorization uses an unsupported format.');
-  if (claims.op !== expected.op) throw forbidden('That authorization is for a different operation.');
+  if (claims.op !== expected.op)
+    throw forbidden('That authorization is for a different operation.');
   if (claims.accountId !== expected.accountId) {
     throw forbidden('That authorization belongs to a different account.');
   }

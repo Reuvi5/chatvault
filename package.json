@@ -17,20 +17,30 @@
     "build": "npm run build --workspace @chatvault/web",
     "start": "npm run start --workspace @chatvault/web",
     "start:local": "CHATVAULT_UNSAFE_LOCAL_PRODUCTION=1 npm run start --workspace @chatvault/web",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run test && npm run build",
     "db:migrate": "tsx apps/web/scripts/migrate.ts",
     "db:sql": "tsx apps/web/scripts/print-sql.ts",
     "worker": "tsx apps/web/scripts/worker.ts",
     "fixtures": "tsx apps/web/scripts/make-fixtures.ts",
-    "drill:restore": "tsx apps/web/scripts/drill-restore.ts",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "drill:restore": "tsx apps/web/scripts/drill-restore.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.10.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.74.0",
     "vitest": "^3.2.7"
   }
 }

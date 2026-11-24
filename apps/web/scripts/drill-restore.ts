@@ -24,7 +24,8 @@ import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-const dataDir = process.env.CHATVAULT_DATA_DIR ?? (await mkdtemp(join(tmpdir(), 'chatvault-drill-')));
+const dataDir =
+  process.env.CHATVAULT_DATA_DIR ?? (await mkdtemp(join(tmpdir(), 'chatvault-drill-')));
 process.env.CHATVAULT_DATA_DIR = dataDir;
 process.env.SERVER_SECRET ??= randomBytes(32).toString('base64url');
 process.env.PRIMARY_DRIVER ??= 'local';
@@ -33,9 +34,8 @@ process.env.PRIMARY_LABEL ??= 'primary-local';
 process.env.SECONDARY_LABEL ??= 'secondary-local';
 delete process.env.SIMULATE_PRIMARY_DOWN;
 
-const { ApiClient, ArchiveReader, bytesImportSource, previewImport, runImport } = await import(
-  '@chatvault/client'
-);
+const { ApiClient, ArchiveReader, bytesImportSource, previewImport, runImport } =
+  await import('@chatvault/client');
 const { createVault, unlockWithRecoveryKey, sha256Hex } = await import('@chatvault/crypto');
 const { buildSyntheticExport, parseTranscript } = await import('@chatvault/parser');
 const { CookieJar, createLocalFetch } = await import('../src/server/localRouter');
@@ -89,7 +89,7 @@ async function main(): Promise<number> {
   record('account created and email confirmed', true, email);
 
   const created = await createVault(PASSPHRASE);
-  await api.createVault(created.vault.bundle as never, 'UTC');
+  await api.createVault(created.vault.bundle, 'UTC');
   record('archive key created, wrapped bundle stored', true, `key ${created.vault.keyId}`);
 
   /* --------------------------------------------------------------- import */
@@ -175,7 +175,11 @@ async function main(): Promise<number> {
   const freshJar = new CookieJar();
   const restoreApi = new ApiClient({ fetchImpl: createLocalFetch({ jar: freshJar }) });
   const session = await restoreApi.login(email, PASSWORD);
-  record('signed in on a fresh session', Boolean(session.vault), `vault ${session.vault?.id ?? '—'}`);
+  record(
+    'signed in on a fresh session',
+    Boolean(session.vault),
+    `vault ${session.vault?.id ?? '—'}`,
+  );
 
   const reopened = await unlockWithRecoveryKey(
     session.vault?.bundle as never,
@@ -231,7 +235,9 @@ async function main(): Promise<number> {
   /* --------------------------------------------------------------- report */
   section('Result');
   const failed = checks.filter((check) => !check.ok);
-  console.log(`${String(checks.length - failed.length)} of ${String(checks.length)} checks passed.`);
+  console.log(
+    `${String(checks.length - failed.length)} of ${String(checks.length)} checks passed.`,
+  );
   if (failed.length > 0) {
     for (const check of failed) console.log(`  failed: ${check.name} — ${check.detail}`);
     console.log(

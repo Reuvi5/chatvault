@@ -55,6 +55,7 @@ import {
 } from '@chatvault/parser';
 import type { ApiClient } from './api';
 import { PartBuffer, collectStream, streamToAsyncIterable, withRetry } from './bytes';
+import { TaskPool } from './pool';
 
 /* ------------------------------------------------------------------ sources */
 
@@ -111,6 +112,17 @@ export interface ImportPreview {
   warnings: ParseWarning[];
 }
 
+/**
+ * How many objects upload at once.
+ *
+ * Imports are dominated by round trips, not by encryption, so a few in flight
+ * is most of the win. The cost is memory: each slot holds one buffered object,
+ * so the ceiling is `DEFAULT_UPLOAD_CONCURRENCY * BUFFERED_UPLOAD_LIMIT`.
+ * Anything larger than that limit is streamed through on its own instead.
+ */
+export const DEFAULT_UPLOAD_CONCURRENCY = 4;
+export const BUFFERED_UPLOAD_LIMIT = 8 * 1024 * 1024;
+
 const ZIP_MAGIC = [0x50, 0x4b];
 
 function looksLikeZip(fileName: string, firstChunk: Uint8Array | null): boolean {
@@ -121,7 +133,10 @@ function looksLikeZip(fileName: string, firstChunk: Uint8Array | null): boolean 
 }
 
 /** Estimate the container size so quotas can be checked before any upload. */
-export function estimateCiphertextBytes(plaintextBytes: number, frameSize = DEFAULT_FRAME_SIZE): number {
+export function estimateCiphertextBytes(
+  plaintextBytes: number,
+  frameSize = DEFAULT_FRAME_SIZE,
+): number {
   const frames = Math.max(1, Math.floor(plaintextBytes / frameSize) + 1);
   return plaintextBytes + frames * 21 + 260;
 }
@@ -153,20 +168,19 @@ export async function previewImport(options: PreviewOptions): Promise<ImportPrev
   const textFiles = new Map<string, Uint8Array>();
   const mediaSizes = new Map<string, number>();
   let skipped: SkippedEntry[] = [];
-  let kind: 'zip' | 'txt';
   let transcriptText: string;
 
   const iterator = hashed();
   const probe = await iterator.next();
-  const head = probe.done ? null : (probe.value as Uint8Array);
-  kind = looksLikeZip(source.fileName, head) ? 'zip' : 'txt';
+  const head = probe.done ? null : probe.value;
+  const kind: 'zip' | 'txt' = looksLikeZip(source.fileName, head) ? 'zip' : 'txt';
 
   async function* replay(): AsyncGenerator<Uint8Array> {
     if (head) yield head;
     for (;;) {
       const next = await iterator.next();
       if (next.done) return;
-      yield next.value as Uint8Array;
+      yield next.value;
     }
   }
 
@@ -205,11 +219,14 @@ export async function previewImport(options: PreviewOptions): Promise<ImportPrev
     for (const [name, bytes] of textFiles) {
       if (name !== choice.name) mediaSizes.set(name, bytes.byteLength);
     }
-    transcriptText = new TextDecoder('utf-8').decode(textFiles.get(choice.name) as Uint8Array);
+    transcriptText = new TextDecoder('utf-8').decode(textFiles.get(choice.name));
   }
 
   const sourceSha256 = hasher.hex();
-  const parsed = parseTranscript(transcriptText, options.dateOrder ? { dateOrder: options.dateOrder } : {});
+  const parsed = parseTranscript(
+    transcriptText,
+    options.dateOrder ? { dateOrder: options.dateOrder } : {},
+  );
   const match = matchAttachments(parsed.referencedFiles, [...mediaSizes.keys()]);
   const guess = inferTitleAndSelf({
     sourceFileName: source.fileName,
@@ -260,7 +277,12 @@ export async function previewImport(options: PreviewOptions): Promise<ImportPrev
   const mediaPlaintextBytes = attachments.reduce((sum, item) => sum + (item.byteLength ?? 0), 0);
 
   return {
-    source: { fileName: source.fileName, byteLength: source.byteLength || bytesRead, sha256: sourceSha256, kind },
+    source: {
+      fileName: source.fileName,
+      byteLength: source.byteLength || bytesRead,
+      sha256: sourceSha256,
+      kind,
+    },
     parsed,
     title: guess.title,
     selfName: guess.selfName,
@@ -274,7 +296,8 @@ export async function previewImport(options: PreviewOptions): Promise<ImportPrev
       estimatedCiphertextBytes:
         estimateCiphertextBytes(messagePlaintextBytes) +
         attachments.reduce(
-          (sum, item) => sum + (item.byteLength === null ? 0 : estimateCiphertextBytes(item.byteLength)),
+          (sum, item) =>
+            sum + (item.byteLength === null ? 0 : estimateCiphertextBytes(item.byteLength)),
           0,
         ) +
         estimateCiphertextBytes(4096),
@@ -330,9 +353,12 @@ async function uploadEncrypted(options: {
   const sendPart = async (bytes: Uint8Array) => {
     const number = partNumber;
     partNumber += 1;
-    await withRetry(() => options.api.uploadPart(auth.uploadUrlTemplate, number, auth.ticket, bytes), {
-      signal: options.signal,
-    });
+    await withRetry(
+      () => options.api.uploadPart(auth.uploadUrlTemplate, number, auth.ticket, bytes),
+      {
+        signal: options.signal,
+      },
+    );
     parts.push({ part: number, bytes: bytes.byteLength });
     options.onBytes?.(bytes.byteLength);
   };
@@ -401,6 +427,8 @@ export interface RunImportOptions {
   existingMessages?: readonly CanonicalMessage[];
   title?: string;
   selfName?: string | null;
+  /** Objects in flight at once. 1 restores the old one-at-a-time behaviour. */
+  concurrency?: number;
   onProgress?: (progress: ImportProgress) => void;
   signal?: AbortSignal;
 }
@@ -466,48 +494,63 @@ export async function runImport(options: RunImportOptions): Promise<ImportOutcom
     cryptoVersion: OBJECT_FORMAT_VERSION,
   });
 
-  /* Message pages. */
-  const pageRefs: ManifestPageRef[] = [];
+  /* Message pages.
+     Pages whose contents did not change are reused as they are. The rest upload
+     through the pool, and each one writes its reference back by index, so the
+     manifest keeps pages in order however the uploads finish. */
+  const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY));
+  const pageSlots: Array<ManifestPageRef | null> = Array.from({ length: pages.length }, () => null);
   let uploadedObjects = 0;
   let reusedObjects = 0;
   let ciphertextBytesUploaded = 0;
+  let pagesDone = 0;
 
-  for (const page of pages) {
+  const pagePool = new TaskPool(concurrency, options.signal);
+  for (const [index, page] of pages.entries()) {
     const reuse = existingPages.get(page.plaintextSha256);
     if (reuse) {
       reusedObjects += 1;
-      pageRefs.push({ ...reuse, pageId: page.pageId });
+      pageSlots[index] = { ...reuse, pageId: page.pageId };
       continue;
     }
-    report({
-      phase: 'messages',
-      label: `Encrypting messages (${String(pageRefs.length + 1)} of ${String(pages.length)})`,
-      objectsDone,
-      objectsTotal,
-      bytesDone,
+    await pagePool.submit(async () => {
+      const uploaded = await uploadEncrypted({
+        api,
+        material: objectsMaterial,
+        importId: created.importId,
+        kind: 'page',
+        data: bytesSource(page.plaintext),
+        estimatedCiphertextBytes: estimateCiphertextBytes(page.plaintext.byteLength),
+        signal: options.signal,
+        onBytes,
+      });
+      uploadedObjects += 1;
+      objectsDone += 1;
+      pagesDone += 1;
+      ciphertextBytesUploaded += uploaded.ciphertextBytes;
+      pageSlots[index] = {
+        pageId: page.pageId,
+        objectId: uploaded.objectId,
+        messageCount: page.messages.length,
+        firstLocalTs: page.messages[0]?.localTs ?? '',
+        lastLocalTs: page.messages.at(-1)?.localTs ?? '',
+        plaintextSha256: page.plaintextSha256,
+        ciphertextBytes: uploaded.ciphertextBytes,
+      };
+      report({
+        phase: 'messages',
+        label: `Encrypting messages (${pagesDone} of ${pagesToUpload.length})`,
+        objectsDone,
+        objectsTotal,
+        bytesDone,
+      });
     });
-    const uploaded = await uploadEncrypted({
-      api,
-      material: objectsMaterial,
-      importId: created.importId,
-      kind: 'page',
-      data: bytesSource(page.plaintext),
-      estimatedCiphertextBytes: estimateCiphertextBytes(page.plaintext.byteLength),
-      signal: options.signal,
-      onBytes,
-    });
-    uploadedObjects += 1;
-    objectsDone += 1;
-    ciphertextBytesUploaded += uploaded.ciphertextBytes;
-    pageRefs.push({
-      pageId: page.pageId,
-      objectId: uploaded.objectId,
-      messageCount: page.messages.length,
-      firstLocalTs: page.messages[0]?.localTs ?? '',
-      lastLocalTs: page.messages.at(-1)?.localTs ?? '',
-      plaintextSha256: page.plaintextSha256,
-      ciphertextBytes: uploaded.ciphertextBytes,
-    });
+  }
+  await pagePool.drain();
+
+  const pageRefs = pageSlots.filter((ref): ref is ManifestPageRef => ref !== null);
+  if (pageRefs.length !== pages.length) {
+    throw new Error('An encrypted message page did not finish uploading; nothing was committed.');
   }
 
   /* Attachments, streamed straight out of the archive. */
@@ -533,46 +576,72 @@ export async function runImport(options: RunImportOptions): Promise<ImportOutcom
 
   if (attachmentsToUpload.length > 0) {
     const wanted = new Map(attachmentsToUpload.map((item) => [item.entryName as string, item]));
-    let index = 0;
+    const mediaPool = new TaskPool(concurrency, options.signal);
+    let mediaDone = 0;
+
+    const uploadAttachment = async (
+      item: PreviewAttachment,
+      data: AsyncIterable<Uint8Array>,
+    ): Promise<void> => {
+      const uploaded = await uploadEncrypted({
+        api,
+        material: objectsMaterial,
+        importId: created.importId,
+        kind: 'media',
+        data,
+        estimatedCiphertextBytes: estimateCiphertextBytes(item.byteLength ?? 0),
+        signal: options.signal,
+        onBytes,
+      });
+      uploadedObjects += 1;
+      objectsDone += 1;
+      mediaDone += 1;
+      ciphertextBytesUploaded += uploaded.ciphertextBytes;
+      attachmentRefs.set(item.fileName, {
+        fileName: item.fileName,
+        objectId: uploaded.objectId,
+        byteLength: uploaded.plaintextBytes,
+        mimeType: item.mimeType,
+        plaintextSha256: uploaded.plaintextSha256,
+        ciphertextBytes: uploaded.ciphertextBytes,
+        missing: false,
+        kind: item.kind,
+      });
+      report({
+        phase: 'media',
+        label: `Encrypting attachments (${mediaDone} of ${attachmentsToUpload.length})`,
+        objectsDone,
+        objectsTotal,
+        bytesDone,
+      });
+    };
+
     await readArchiveStream({
       source: options.source.open(),
       signal: options.signal,
       onEntry: async (entry) => {
         const item = wanted.get(entry.name);
         if (!item) return;
-        index += 1;
-        report({
-          phase: 'media',
-          label: `Encrypting ${item.fileName} (${String(index)} of ${String(attachmentsToUpload.length)})`,
-          objectsDone,
-          objectsTotal,
-          bytesDone,
-        });
-        const uploaded = await uploadEncrypted({
-          api,
-          material: objectsMaterial,
-          importId: created.importId,
-          kind: 'media',
-          data: entry.chunks,
-          estimatedCiphertextBytes: estimateCiphertextBytes(item.byteLength ?? 0),
-          signal: options.signal,
-          onBytes,
-        });
-        uploadedObjects += 1;
-        objectsDone += 1;
-        ciphertextBytesUploaded += uploaded.ciphertextBytes;
-        attachmentRefs.set(item.fileName, {
-          fileName: item.fileName,
-          objectId: uploaded.objectId,
-          byteLength: uploaded.plaintextBytes,
-          mimeType: item.mimeType,
-          plaintextSha256: uploaded.plaintextSha256,
-          ciphertextBytes: uploaded.ciphertextBytes,
-          missing: false,
-          kind: item.kind,
-        });
+
+        /* Small attachments — which is nearly all of them — are read here and
+           handed to the pool, so several upload at once. Anything big is
+           streamed through on its own, after the pool empties, so memory stays
+           bounded no matter what the archive contains. */
+        if ((item.byteLength ?? Number.POSITIVE_INFINITY) <= BUFFERED_UPLOAD_LIMIT) {
+          const bytes = await collectEntry(
+            entry.chunks,
+            BUFFERED_UPLOAD_LIMIT + 1024,
+            item.fileName,
+          );
+          await mediaPool.submit(() => uploadAttachment(item, bytesSource(bytes)));
+        } else {
+          await mediaPool.drain();
+          await uploadAttachment(item, entry.chunks);
+        }
       },
     });
+
+    await mediaPool.drain();
   }
 
   /* The manifest, written last. */
@@ -583,7 +652,10 @@ export async function runImport(options: RunImportOptions): Promise<ImportOutcom
     manifestVersion: (options.existingManifest?.manifestVersion ?? 0) + 1,
     title: options.title ?? options.existingManifest?.title ?? preview.title,
     isGroup: options.existingManifest?.isGroup || preview.parsed.isGroup,
-    participants: mergeUnique(options.existingManifest?.participants ?? [], preview.parsed.participants),
+    participants: mergeUnique(
+      options.existingManifest?.participants ?? [],
+      preview.parsed.participants,
+    ),
     selfName: options.selfName ?? options.existingManifest?.selfName ?? preview.selfName,
     messageCount: merge.merged.length,
     firstLocalTs: merge.merged[0]?.localTs ?? null,
@@ -617,7 +689,13 @@ export async function runImport(options: RunImportOptions): Promise<ImportOutcom
     updatedAtMs: nowMs,
   };
 
-  report({ phase: 'manifest', label: 'Encrypting the index', objectsDone, objectsTotal, bytesDone });
+  report({
+    phase: 'manifest',
+    label: 'Encrypting the index',
+    objectsDone,
+    objectsTotal,
+    bytesDone,
+  });
   const manifestPlaintext = toUtf8(JSON.stringify(manifest));
   const manifestObject = await uploadEncrypted({
     api,
@@ -646,7 +724,13 @@ export async function runImport(options: RunImportOptions): Promise<ImportOutcom
       .filter((id): id is string => !!id),
   ].filter((id) => !keptObjectIds.has(id));
 
-  report({ phase: 'finalising', label: 'Checking what was stored', objectsDone, objectsTotal, bytesDone });
+  report({
+    phase: 'finalising',
+    label: 'Checking what was stored',
+    objectsDone,
+    objectsTotal,
+    bytesDone,
+  });
   await api.completeImport(created.importId, {
     manifestObjectId: manifestObject.objectId,
     manifestVersion: manifest.manifestVersion,

@@ -79,14 +79,19 @@ plaintext, failing if it finds any.
 ### Everything else
 
 ```bash
-npm test            # 237 tests: crypto, parser, pricing, API, authorisation
+npm test            # 257 tests: crypto, parser, pricing, API, authorisation
+npm run lint        # type-aware ESLint, React hooks rules, accessibility rules
+npm run format      # Prettier over everything
 npm run typecheck   # tsc over every package and the app
-npm run check       # typecheck + test + production build
+npm run check       # lint + format + typecheck + test + production build
 npm run worker      # the replication / verification / deletion / billing worker
 npm run worker -- --once
 npm run build && npm run start:local   # check the optimised build locally
 npm run db:sql      # print the Postgres schema, with its RLS policies
 ```
+
+CI runs all of that on every push, on Node 20 and 22, plus the restore drill —
+see `.github/workflows/ci.yml`.
 
 `npm start` on its own is for a configured deployment and will refuse to run on
 development defaults — that refusal is deliberate. Use `npm run dev` locally, or
@@ -134,9 +139,16 @@ has the data flow; `docs/CRYPTO-SPEC.md` has the formats, byte for byte.
   verification on both copies, a dead-letter state, scheduled reconciliation, and
   reads that fail over to the backup copy. **Verified** appears only when both
   copies and the index check out.
-- Viewer: chat list, timeline with media, lightbox, audio and video playback,
-  document download, date separators, jump to date, per-conversation and
-  archive-wide search, all on the device.
+- Viewer: chat list, timeline with media, a real image lightbox, audio and video
+  playback, document download, date separators, jump to date, per-conversation
+  and archive-wide search, all on the device. Long conversations mount a window
+  of days that grows as you scroll, so a hundred thousand messages stays
+  responsive.
+- Conversations are cached on the device after the first read, re-encrypted
+  under the vault's own key, so reopening a large archive is one local decrypt
+  instead of hundreds of round trips. Locking the vault clears it.
+- Imports upload several objects at once through a bounded pool, and no database
+  transaction is ever held open across a call to a storage provider.
 - Usage measured by integrating stored bytes over time, billed once per logical
   byte at $0.05 per GB-month with a GB of 1,000,000,000 bytes; Stripe metered
   billing when configured, and an honest "not configured" when not.
@@ -171,16 +183,16 @@ has the data flow; `docs/CRYPTO-SPEC.md` has the formats, byte for byte.
 Everything has a working default for local use. `.env.example` documents every
 variable; the ones that matter in production:
 
-| Variable | Purpose |
-| --- | --- |
-| `SERVER_SECRET` | Signs session cookies and upload tickets; encrypts stored TOTP secrets. Required, 32+ characters. |
-| `DATABASE_URL` | Postgres, as an **unprivileged** role. Required in production. |
-| `PRIMARY_*` | Primary object store: `s3` in production (Cloudflare R2 in the plan). |
-| `SECONDARY_*` | The second copy, with its own credentials (Backblaze B2 in the plan). |
-| `BILLING_MINIMUM_CENTS` | Minimum charge. **Defaults to 0 — not approved.** |
-| `FREE_ALLOWANCE_GB` | Free allowance. **Defaults to 0 — not approved.** |
-| `STRIPE_*` | Enables billing. Absent means nothing is charged. |
-| `TRASH_RETENTION_DAYS` | How long a deleted conversation stays restorable. Default 30. |
+| Variable                | Purpose                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `SERVER_SECRET`         | Signs session cookies and upload tickets; encrypts stored TOTP secrets. Required, 32+ characters. |
+| `DATABASE_URL`          | Postgres, as an **unprivileged** role. Required in production.                                    |
+| `PRIMARY_*`             | Primary object store: `s3` in production (Cloudflare R2 in the plan).                             |
+| `SECONDARY_*`           | The second copy, with its own credentials (Backblaze B2 in the plan).                             |
+| `BILLING_MINIMUM_CENTS` | Minimum charge. **Defaults to 0 — not approved.**                                                 |
+| `FREE_ALLOWANCE_GB`     | Free allowance. **Defaults to 0 — not approved.**                                                 |
+| `STRIPE_*`              | Enables billing. Absent means nothing is charged.                                                 |
+| `TRASH_RETENTION_DAYS`  | How long a deleted conversation stays restorable. Default 30.                                     |
 
 For Postgres and the two buckets locally:
 

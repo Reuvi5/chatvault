@@ -14,10 +14,22 @@ import { buildMaliciousArchive, buildSyntheticExport, parseTranscript } from '@c
 const OUT = resolve(process.env.FIXTURE_DIR ?? 'fixtures-generated');
 
 const CASES = [
-  { name: 'ios-1to1-with-media', options: { platform: 'ios', withMedia: true, group: false, messageCount: 90 } },
-  { name: 'ios-group-with-media', options: { platform: 'ios', withMedia: true, group: true, messageCount: 90 } },
-  { name: 'ios-1to1-no-media', options: { platform: 'ios', withMedia: false, group: false, messageCount: 90 } },
-  { name: 'android-group-with-media', options: { platform: 'android', withMedia: true, group: true, messageCount: 90 } },
+  {
+    name: 'ios-1to1-with-media',
+    options: { platform: 'ios', withMedia: true, group: false, messageCount: 90 },
+  },
+  {
+    name: 'ios-group-with-media',
+    options: { platform: 'ios', withMedia: true, group: true, messageCount: 90 },
+  },
+  {
+    name: 'ios-1to1-no-media',
+    options: { platform: 'ios', withMedia: false, group: false, messageCount: 90 },
+  },
+  {
+    name: 'android-group-with-media',
+    options: { platform: 'android', withMedia: true, group: true, messageCount: 90 },
+  },
   {
     name: 'android-us-dates-no-media',
     options: {
@@ -51,7 +63,7 @@ async function main(): Promise<void> {
   const rows: string[] = [];
 
   for (const testCase of CASES) {
-    const fixture = buildSyntheticExport({ ...testCase.options, seed: 4242 } as never);
+    const fixture = buildSyntheticExport({ ...testCase.options, seed: 4242 });
     const fileName = `${testCase.name}.${fixture.kind}`;
     await writeFile(join(OUT, fileName), fixture.bytes);
     const parsed = parseTranscript(fixture.transcript);

@@ -97,7 +97,8 @@ export async function completeImport(
   input: CompleteImportRequest,
 ): Promise<ImportStatusResponse> {
   const importRow = await store.get('imports', importId);
-  if (!importRow || importRow.account_id !== account.id) throw notFound('That import does not exist.');
+  if (!importRow || importRow.account_id !== account.id)
+    throw notFound('That import does not exist.');
   if (importRow.state === 'verified' || importRow.state === 'primary_stored') {
     return buildImportStatus(store, importRow);
   }

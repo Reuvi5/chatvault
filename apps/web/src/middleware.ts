@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { THEME_BOOTSTRAP_SHA256 } from '@/themeBootstrap';
 
 /**
  * Content-Security-Policy with a per-request nonce.
@@ -8,8 +9,10 @@ import { NextResponse, type NextRequest } from 'next/server';
  * tight policy makes injected third-party script much harder to run, and there
  * is no third-party script in this app at all.
  *
- * `blob:` is allowed for images and media because decrypted attachments are
- * rendered from in-memory blobs; it is not a network origin.
+ * `script-src` allows exactly three things: our own scripts via the nonce and
+ * `strict-dynamic`, and the one inline theme bootstrap, by hash. `blob:` is
+ * allowed for images and media because decrypted attachments are rendered from
+ * in-memory blobs; it is not a network origin.
  */
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
@@ -17,7 +20,9 @@ export function middleware(request: NextRequest) {
 
   const policy = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ''}`,
+    `script-src 'self' 'nonce-${nonce}' '${THEME_BOOTSTRAP_SHA256}' 'strict-dynamic'${
+      isDevelopment ? " 'unsafe-eval'" : ''
+    }`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "media-src 'self' blob:",

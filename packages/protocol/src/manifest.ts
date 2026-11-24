@@ -52,7 +52,8 @@ export interface ManifestImportRecord {
 }
 
 export interface ConversationManifest {
-  v: typeof MANIFEST_VERSION | number;
+  /** Schema version of this document; `MANIFEST_VERSION` when freshly written. */
+  v: number;
   conversationId: string;
   /** Monotonic; every re-import writes a new version. */
   manifestVersion: number;
@@ -122,9 +123,20 @@ export function attachmentKindFor(fileName: string): ManifestAttachmentRef['kind
     return 'audio';
   }
   if (
-    ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'rtf', 'zip', 'vcf'].includes(
-      ext,
-    )
+    [
+      'pdf',
+      'doc',
+      'docx',
+      'xls',
+      'xlsx',
+      'ppt',
+      'pptx',
+      'txt',
+      'csv',
+      'rtf',
+      'zip',
+      'vcf',
+    ].includes(ext)
   ) {
     return 'document';
   }

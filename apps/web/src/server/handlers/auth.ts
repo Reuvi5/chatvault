@@ -158,7 +158,13 @@ export async function handleLogin(request: Request): Promise<Response> {
   if (account.mfa_enabled) {
     if (!input.totp) {
       return jsonResponse(
-        { error: { code: 'unauthorized', message: 'Enter the six-digit code from your authenticator app.', details: { mfaRequired: true } } },
+        {
+          error: {
+            code: 'unauthorized',
+            message: 'Enter the six-digit code from your authenticator app.',
+            details: { mfaRequired: true },
+          },
+        },
         { status: 401 },
       );
     }
@@ -265,7 +271,9 @@ export async function handleResendVerification(request: Request): Promise<Respon
   });
   const url = verificationUrl(token);
   sendVerificationEmail(account.email, url);
-  return jsonResponse(getEnv().isProduction ? { sent: true } : { sent: true, verificationUrl: url });
+  return jsonResponse(
+    getEnv().isProduction ? { sent: true } : { sent: true, verificationUrl: url },
+  );
 }
 
 /* ---------------------------------------------------------------- TOTP ---- */
@@ -289,7 +297,8 @@ export async function handleMfaConfirm(request: Request): Promise<Response> {
   const { account } = await requireSession(request);
   const input = await parseBody(request, enrollTotpRequest);
   const store = await getStore();
-  if (!account.mfa_secret_enc) throw badRequest('Start setting up two-factor authentication first.');
+  if (!account.mfa_secret_enc)
+    throw badRequest('Start setting up two-factor authentication first.');
   const secret = decryptSecret(account.mfa_secret_enc);
   if (!verifyTotp(secret, input.code)) {
     throw badRequest('That code is not right. Check your authenticator app and try again.');

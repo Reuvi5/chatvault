@@ -74,7 +74,10 @@ export function validateFilter<T extends TableName>(
   for (const column of filter.isNotNull ?? []) assertColumn(table, column);
 }
 
-export function rowMatchesFilter(row: Record<string, unknown>, filter: Filter<never> | undefined): boolean {
+export function rowMatchesFilter(
+  row: Record<string, unknown>,
+  filter: Filter<never> | undefined,
+): boolean {
   if (!filter) return true;
   for (const [column, value] of Object.entries(filter.equals ?? {})) {
     if (row[column] !== value) return false;

@@ -26,8 +26,7 @@ export interface TimeParts {
 }
 
 const DATE_RE = /^(\d{1,4})[./\-](\d{1,2})[./\-](\d{1,4})$/u;
-const TIME_RE =
-  /^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\s*([APap])\.?\s?[Mm]\.?)?$/u;
+const TIME_RE = /^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\s*([APap])\.?\s?[Mm]\.?)?$/u;
 
 /** Split a date field into its three numeric components, or null. */
 export function dateComponents(text: string): [number, number, number] | null {
@@ -80,7 +79,8 @@ export function detectDateOrder(samples: readonly string[]): DateOrderDecision {
     // is the dominant export locale, but flag it as merely assumed.
     return { order: 'dmy', confidence: 'assumed', evidence: sawDayFirstEvidence };
   }
-  if (sawDayFirstEvidence) return { order: 'dmy', confidence: 'certain', evidence: sawDayFirstEvidence };
+  if (sawDayFirstEvidence)
+    return { order: 'dmy', confidence: 'certain', evidence: sawDayFirstEvidence };
   if (sawMonthFirstEvidence) {
     return { order: 'mdy', confidence: 'certain', evidence: sawMonthFirstEvidence };
   }
@@ -129,7 +129,12 @@ export function daysInMonth(year: number, month: number): number {
 }
 
 export function parseTimeField(text: string): TimeParts | null {
-  const match = TIME_RE.exec(text.trim().replace(/[\u00a0\u202f\u200e\u200f]/gu, ' ').trim());
+  const match = TIME_RE.exec(
+    text
+      .trim()
+      .replace(/[\u00a0\u202f\u200e\u200f]/gu, ' ')
+      .trim(),
+  );
   if (!match) return null;
   let hour = Number(match[1]);
   const minute = Number(match[2]);

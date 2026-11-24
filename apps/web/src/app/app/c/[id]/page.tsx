@@ -4,20 +4,30 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { formatBytes } from '@chatvault/protocol';
-import { buildCorpus, buildReadableExport, searchCorpora, type IntegrityReport } from '@chatvault/client';
+import {
+  buildCorpus,
+  buildReadableExport,
+  searchCorpora,
+  type IntegrityReport,
+} from '@chatvault/client';
 import { dateIndex } from '@chatvault/client';
 import type { CanonicalMessage } from '@chatvault/parser';
 import {
   Badge,
   Button,
   Card,
+  LiveStatus,
   Notice,
   ProgressBar,
+  SkeletonBubbles,
   Spinner,
   TextInput,
 } from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';
 import { MessageTimeline } from '@/components/MessageTimeline';
+
+/** One shared empty list, so "no messages yet" is identity-stable. */
+const NO_MESSAGES: readonly CanonicalMessage[] = [];
 
 export default function ConversationPage() {
   const params = useParams<{ id: string }>();
@@ -36,10 +46,17 @@ export default function ConversationPage() {
 
   const entry = conversations.find((candidate) => candidate.summary.id === conversationId);
   const manifest = entry?.manifest ?? null;
-  const messages: CanonicalMessage[] = messagesByConversation[conversationId] ?? [];
+
+  /* Identity-stable: the provider never mutates a loaded list, and the fallback
+     is a shared constant, so search and the date index below only recompute when
+     the conversation actually changes. */
+  const messages: readonly CanonicalMessage[] =
+    messagesByConversation[conversationId] ?? NO_MESSAGES;
+  const loaded = Boolean(messagesByConversation[conversationId]);
 
   const [query, setQuery] = useState('');
-  const [selfName, setSelfName] = useState<string | null>(null);
+  /** Undefined means "whatever the manifest says"; anything else is a choice. */
+  const [selfOverride, setSelfOverride] = useState<string | null | undefined>(undefined);
   const [verifying, setVerifying] = useState(false);
   const [report, setReport] = useState<IntegrityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,17 +66,27 @@ export default function ConversationPage() {
   const highlightParam = search.get('at');
   const highlightIndex = highlightParam === null ? null : Number(highlightParam);
 
-  useEffect(() => {
-    if (manifest) setSelfName(manifest.selfName);
-  }, [manifest]);
+  // Derived, not copied into state by an effect: the manifest already knows.
+  const selfName = selfOverride === undefined ? (manifest?.selfName ?? null) : selfOverride;
 
   useEffect(() => {
-    if (manifest && !messagesByConversation[conversationId]) {
-      void loadMessages(conversationId).catch((caught: unknown) =>
-        setError(caught instanceof Error ? caught.message : 'That conversation could not be read.'),
-      );
-    }
-  }, [manifest, conversationId, messagesByConversation, loadMessages]);
+    if (!manifest || loaded) return;
+    let active = true;
+    void (async () => {
+      try {
+        await loadMessages(conversationId);
+      } catch (caught) {
+        if (active) {
+          setError(
+            caught instanceof Error ? caught.message : 'That conversation could not be read.',
+          );
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [manifest, loaded, conversationId, loadMessages]);
 
   const hits = useMemo(() => {
     if (query.trim().length < 2 || !manifest) return [];
@@ -116,8 +143,8 @@ export default function ConversationPage() {
               {manifest.messageCount.toLocaleString('en-US')} messages ·{' '}
               {manifest.participants.length} participant
               {manifest.participants.length === 1 ? '' : 's'} ·{' '}
-              {formatBytes(entry.summary.logicalBytes)} · imported{' '}
-              {manifest.imports.length} time{manifest.imports.length === 1 ? '' : 's'}
+              {formatBytes(entry.summary.logicalBytes)} · imported {manifest.imports.length} time
+              {manifest.imports.length === 1 ? '' : 's'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -183,7 +210,7 @@ export default function ConversationPage() {
               aria-label="Which participant is you"
               className="sunken rounded-lg border hairline px-2.5 py-2 text-sm"
               value={selfName ?? ''}
-              onChange={(event) => setSelfName(event.target.value || null)}
+              onChange={(event) => setSelfOverride(event.target.value || null)}
             >
               <option value="">Nobody is me</option>
               {manifest.participants.map((name) => (
@@ -267,12 +294,19 @@ export default function ConversationPage() {
         </Card>
       ) : null}
 
-      <MessageTimeline
-        manifest={manifest}
-        messages={messages}
-        selfName={selfName}
-        highlightIndex={highlightIndex}
-      />
+      {loaded ? (
+        <MessageTimeline
+          manifest={manifest}
+          messages={messages}
+          selfName={selfName}
+          highlightIndex={highlightIndex}
+        />
+      ) : (
+        <>
+          <LiveStatus>Decrypting this conversation</LiveStatus>
+          <SkeletonBubbles rows={8} />
+        </>
+      )}
 
       <footer className="mt-8 flex flex-wrap items-center gap-3 border-t hairline pt-4">
         <Button

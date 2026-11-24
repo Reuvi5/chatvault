@@ -30,10 +30,7 @@ export async function handleCreateImport(request: Request): Promise<Response> {
   return jsonResponse(result, { status: 201 });
 }
 
-export async function handleCompleteImport(
-  request: Request,
-  importId: string,
-): Promise<Response> {
+export async function handleCompleteImport(request: Request, importId: string): Promise<Response> {
   const { account } = await requireVerifiedSession(request);
   enforceRateLimit(`imports:${account.id}`, getEnv().rateLimits.upload);
   const input = await parseBody(request, completeImportRequest);
@@ -51,10 +48,7 @@ export async function handleCompleteImport(
   return jsonResponse(result);
 }
 
-export async function handleImportStatus(
-  request: Request,
-  importId: string,
-): Promise<Response> {
+export async function handleImportStatus(request: Request, importId: string): Promise<Response> {
   const { account } = await requireVerifiedSession(request);
   enforceRateLimit(`read:${clientHash(request)}`, getEnv().rateLimits.read);
   const store = await getStore();

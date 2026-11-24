@@ -9,7 +9,9 @@ export const GET = route(async (request: Request, context: { params: Promise<{ i
   return handleObjectContent(request, id);
 });
 
-export const HEAD = route(async (request: Request, context: { params: Promise<{ id: string }> }) => {
-  const { id } = await context.params;
-  return handleHeadObject(request, id);
-});
+export const HEAD = route(
+  async (request: Request, context: { params: Promise<{ id: string }> }) => {
+    const { id } = await context.params;
+    return handleHeadObject(request, id);
+  },
+);

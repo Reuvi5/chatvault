@@ -75,7 +75,11 @@ describe('two independent copies', () => {
   });
 
   it('serves a read from the backup copy when the primary file is gone', async () => {
-    const { outcome } = await importFixture(account, { messageCount: 8, seed: 32, withMedia: false });
+    const { outcome } = await importFixture(account, {
+      messageCount: 8,
+      seed: 32,
+      withMedia: false,
+    });
     await account.api.runReplication(500);
 
     const store = await getStore();
@@ -116,9 +120,9 @@ describe('when the backup copy cannot be made', () => {
     }
     expect(lastFailed).toBeGreaterThan(0);
 
-    const replica = (
-      await store.find('replicas', { equals: { object_id: victim.id } })
-    ).find((candidate) => candidate.provider !== 'primary-test');
+    const replica = (await store.find('replicas', { equals: { object_id: victim.id } })).find(
+      (candidate) => candidate.provider !== 'primary-test',
+    );
     expect(replica?.state).toBe('failed');
     expect(replica?.attempts).toBeGreaterThanOrEqual(MAX_REPLICATION_ATTEMPTS);
     expect(replica?.last_error).toBeTruthy();

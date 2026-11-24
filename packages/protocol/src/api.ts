@@ -129,7 +129,11 @@ export const createImportRequest = z.object({
   /** Omitted for a brand-new conversation; set when merging into an existing one. */
   conversationId: idSchema.nullish(),
   /** Bytes the client expects to upload, used for quota checks before upload. */
-  plannedCiphertextBytes: z.number().int().nonnegative().max(2 ** 53 - 1),
+  plannedCiphertextBytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(2 ** 53 - 1),
   plannedObjectCount: z.number().int().nonnegative().max(1_000_000),
   parserVersion: z.number().int().positive(),
   cryptoVersion: z.number().int().positive(),

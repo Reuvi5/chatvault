@@ -47,7 +47,12 @@ describe('a first import', () => {
   });
 
   it('reads back exactly what went in', async () => {
-    const fixture = buildSyntheticExport({ platform: 'ios', withMedia: true, messageCount: 25, seed: 2 });
+    const fixture = buildSyntheticExport({
+      platform: 'ios',
+      withMedia: true,
+      messageCount: 25,
+      seed: 2,
+    });
     const source = bytesImportSource(fixture.fileName, fixture.bytes);
     const preview = await previewImport({ source });
     const outcome = await runImport({
@@ -80,7 +85,12 @@ describe('a first import', () => {
 
 describe('re-importing', () => {
   it('adds nothing and re-uploads nothing but the manifest when the export is identical', async () => {
-    const fixture = buildSyntheticExport({ platform: 'android', withMedia: true, messageCount: 18, seed: 3 });
+    const fixture = buildSyntheticExport({
+      platform: 'android',
+      withMedia: true,
+      messageCount: 18,
+      seed: 3,
+    });
     const source = bytesImportSource(fixture.fileName, fixture.bytes);
     const preview = await previewImport({ source });
 

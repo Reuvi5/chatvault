@@ -22,10 +22,19 @@ export default function ImportStatusPage() {
     }
   }, [api, params.id]);
 
+  /* Poll while this page is open, and stop cleanly when it is not. */
   useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
-    return () => window.clearInterval(timer);
+    let active = true;
+    const load = async () => {
+      if (!active) return;
+      await refresh();
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [refresh]);
 
   const replicate = async () => {
@@ -81,9 +90,9 @@ export default function ImportStatusPage() {
       {status.objects.failed > 0 ? (
         <Notice tone="danger" title="Some objects could not be copied to the backup provider">
           <p>
-            {status.objects.failed} object(s) were parked after repeated failures. Your data is still
-            on the primary provider, but this conversation will not show as verified until the backup
-            copy succeeds.
+            {status.objects.failed} object(s) were parked after repeated failures. Your data is
+            still on the primary provider, but this conversation will not show as verified until the
+            backup copy succeeds.
           </p>
         </Notice>
       ) : null}
@@ -93,8 +102,8 @@ export default function ImportStatusPage() {
           <h2 className="text-base font-semibold">Waiting for the second copy</h2>
           <p className="muted text-sm leading-relaxed">
             A conversation is only marked verified once every object exists on two independent
-            providers and the index can be recovered. In deployment a scheduled worker does this; you
-            can also run it now.
+            providers and the index can be recovered. In deployment a scheduled worker does this;
+            you can also run it now.
           </p>
           <Button busy={busy} onClick={() => void replicate()}>
             Make the backup copy now

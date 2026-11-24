@@ -68,9 +68,18 @@ function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Visible only once focused: the first stop for anyone using a keyboard. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-accent-500 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+      >
+        Skip to content
+      </a>
       <Nav />
       <VerifyBanner />
-      <div className="flex-1">{children}</div>
+      <div id="main" tabIndex={-1} className="flex-1">
+        {children}
+      </div>
     </div>
   );
 }

@@ -66,12 +66,12 @@ describe('upload and download tickets', () => {
 
   it('is refused when tampered with or expired', () => {
     const { ticket } = issueTicket(claims);
-    const [payload, signature] = ticket.split('.');
+    const [payload = '', signature = ''] = ticket.split('.');
     expect(() =>
       verifyTicket(`${payload}x.${signature}`, { op: 'download', accountId: claims.accountId }),
     ).toThrow();
     expect(() =>
-      verifyTicket(`${payload}.${signature?.slice(0, -2)}ab`, {
+      verifyTicket(`${payload}.${signature.slice(0, -2)}ab`, {
         op: 'download',
         accountId: claims.accountId,
       }),

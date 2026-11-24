@@ -24,8 +24,8 @@ export default function TrashPage() {
 
       <Notice tone="neutral">
         <p>
-          A conversation in the trash is still stored on both providers and can be restored. Once the
-          retention window passes, a scheduled job removes both copies and the metadata.
+          A conversation in the trash is still stored on both providers and can be restored. Once
+          the retention window passes, a scheduled job removes both copies and the metadata.
         </p>
       </Notice>
 

@@ -10,6 +10,14 @@
  *
  * What the server cannot do is tell whether the plaintext is what the person
  * intended; only the AES-GCM tags on the device can.
+ *
+ * **Transactions never wrap provider I/O.** Talking to a bucket from inside an
+ * open database transaction holds a connection for the length of a network
+ * round trip, stretches lock windows, and — on the single-process development
+ * store — serialises every upload behind one mutex, which made concurrent
+ * uploads pointless. So each operation here is: a short transaction for the
+ * database work, the I/O outside it, then another short transaction to record
+ * what happened. The states in between are ones the reaper already understands.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -41,70 +49,84 @@ export async function authorizeUpload(
   account: RowOf<'accounts'>,
   input: { importId: string; kind: ObjectKind; expectedCiphertextBytes: number },
 ): Promise<UploadAuthorization> {
-  const importRow = await store.get('imports', input.importId);
-  if (!importRow || importRow.account_id !== account.id) {
-    throw notFound('That import does not exist.');
-  }
-  if (!['open', 'uploading'].includes(importRow.state)) {
-    throw conflict('That import is already finished.');
-  }
-
-  const usage = await measureUsage(store, account.id);
-  const projected = usage.logicalBytes + importRow.ciphertext_bytes + input.expectedCiphertextBytes;
-  if (projected > account.quota_bytes) {
-    throw quotaExceeded(
-      'This import would take the archive past the storage limit on this account.',
-      { quotaBytes: account.quota_bytes, currentBytes: usage.logicalBytes },
-    );
-  }
-
   const objectId = newId('obj');
   const storageKey = objectStorageKey(account.id, objectId);
   const driver = getPrimaryDriver();
-  const { uploadId } = await driver.beginUpload(storageKey);
   const now = Date.now();
 
-  await store.insert('objects', {
-    id: objectId,
-    account_id: account.id,
-    vault_id: importRow.vault_id,
-    conversation_id: importRow.conversation_id,
-    import_id: importRow.id,
-    kind: input.kind,
-    state: 'pending',
-    storage_key: storageKey,
-    ciphertext_bytes: 0,
-    ciphertext_sha256: null,
-    part_count: 0,
-    created_at_ms: now,
-    updated_at_ms: now,
-    trashed_at_ms: null,
-    purge_after_ms: null,
+  /* Phase one, in a transaction: check the import and the quota, and claim the
+     identifier. No provider call happens while this is open. */
+  await store.transaction(account.id, async (tx) => {
+    const importRow = await tx.get('imports', input.importId);
+    if (!importRow || importRow.account_id !== account.id) {
+      throw notFound('That import does not exist.');
+    }
+    if (!['open', 'uploading'].includes(importRow.state)) {
+      throw conflict('That import is already finished.');
+    }
+
+    const usage = await measureUsage(tx, account.id);
+    const projected =
+      usage.logicalBytes + importRow.ciphertext_bytes + input.expectedCiphertextBytes;
+    if (projected > account.quota_bytes) {
+      throw quotaExceeded(
+        'This import would take the archive past the storage limit on this account.',
+        { quotaBytes: account.quota_bytes, currentBytes: usage.logicalBytes },
+      );
+    }
+
+    await tx.insert('objects', {
+      id: objectId,
+      account_id: account.id,
+      vault_id: importRow.vault_id,
+      conversation_id: importRow.conversation_id,
+      import_id: importRow.id,
+      kind: input.kind,
+      state: 'pending',
+      storage_key: storageKey,
+      ciphertext_bytes: 0,
+      ciphertext_sha256: null,
+      part_count: 0,
+      created_at_ms: now,
+      updated_at_ms: now,
+      trashed_at_ms: null,
+      purge_after_ms: null,
+    });
+
+    await tx.insert('upload_sessions', {
+      id: objectId,
+      account_id: account.id,
+      object_id: objectId,
+      provider: driver.label,
+      provider_upload_id: null,
+      parts_json: '[]',
+      created_at_ms: now,
+      expires_at_ms: now + 24 * 60 * 60 * 1000,
+    });
+
+    if (importRow.state === 'open') {
+      await tx.update('imports', importRow.id, { state: 'uploading', updated_at_ms: now });
+    }
   });
 
-  await store.insert('upload_sessions', {
-    id: objectId,
-    account_id: account.id,
-    object_id: objectId,
-    provider: driver.label,
-    provider_upload_id: uploadId,
-    parts_json: '[]',
-    created_at_ms: now,
-    expires_at_ms: now + 24 * 60 * 60 * 1000,
-  });
-
-  if (importRow.state === 'open') {
-    await store.update('imports', importRow.id, { state: 'uploading', updated_at_ms: now });
+  /* The provider call, outside any transaction. If the process dies here the
+     upload session simply has no provider id, and the reaper abandons it. */
+  const { uploadId } = await driver.beginUpload(storageKey);
+  if (uploadId !== null) {
+    await store.update('upload_sessions', objectId, { provider_upload_id: uploadId });
   }
 
   // A generous ceiling: the exact size is checked at completion.
-  const maxBytes = Math.max(1024 * 1024, Math.ceil(input.expectedCiphertextBytes * 1.5) + 1024 * 1024);
+  const maxBytes = Math.max(
+    1024 * 1024,
+    Math.ceil(input.expectedCiphertextBytes * 1.5) + 1024 * 1024,
+  );
   const { ticket, expiresAtMs } = issueTicket({
     op: 'upload',
     accountId: account.id,
     objectId,
     storageKey,
-    importId: importRow.id,
+    importId: input.importId,
     maxBytes,
   });
 
@@ -152,6 +174,9 @@ export async function receivePart(
     throw badRequest('This upload is larger than the size it was authorized for.');
   }
 
+  /* The part goes to the provider first, with nothing held open, and only then
+     is it recorded. A part that is stored but unrecorded is retried by the
+     client and overwritten; a part recorded but not stored would be a lie. */
   const { etag } = await driver.uploadPart(
     claims.storageKey,
     session.provider_upload_id,
@@ -159,17 +184,21 @@ export async function receivePart(
     input.bytes,
   );
 
-  const next = parts.filter((part) => part.partNumber !== input.partNumber);
-  next.push({ partNumber: input.partNumber, etag, bytes: input.bytes.byteLength });
-  next.sort((a, b) => a.partNumber - b.partNumber);
-  await store.update('upload_sessions', input.objectId, { parts_json: JSON.stringify(next) });
+  await store.transaction(accountId, async (tx) => {
+    const current = await tx.get('upload_sessions', input.objectId);
+    if (!current) throw conflict('That upload is no longer in progress. Start it again.');
+    const recorded = (JSON.parse(current.parts_json) as RecordedPart[]).filter(
+      (part) => part.partNumber !== input.partNumber,
+    );
+    recorded.push({ partNumber: input.partNumber, etag, bytes: input.bytes.byteLength });
+    recorded.sort((a, b) => a.partNumber - b.partNumber);
+    await tx.update('upload_sessions', input.objectId, { parts_json: JSON.stringify(recorded) });
+  });
 
   return { accepted: input.bytes.byteLength };
 }
 
-async function hashStoredObject(
-  storageKey: string,
-): Promise<{ sha256: string; bytes: number }> {
+async function hashStoredObject(storageKey: string): Promise<{ sha256: string; bytes: number }> {
   const driver = getPrimaryDriver();
   const stream = await driver.getWebStream(storageKey);
   const hash = createHash('sha256');
@@ -200,8 +229,7 @@ export interface CompletedObject {
  * into a 400.
  */
 export type CompleteObjectVerdict =
-  | { status: 'stored'; object: CompletedObject }
-  | { status: 'rejected'; reason: string };
+  { status: 'stored'; object: CompletedObject } | { status: 'rejected'; reason: string };
 
 export async function completeObject(
   store: Store,
@@ -215,6 +243,8 @@ export async function completeObject(
   },
 ): Promise<CompleteObjectVerdict> {
   const claims = verifyTicket(input.ticket, { op: 'upload', accountId: account.id });
+
+  /* Read the current state first, with nothing held open. */
   const object = await store.get('objects', claims.objectId);
   if (!object || object.account_id !== account.id) throw notFound('That object does not exist.');
   if (object.state !== 'pending') {
@@ -234,89 +264,96 @@ export async function completeObject(
   if (recorded.length === 0) throw badRequest('No parts were uploaded for that object.');
 
   const driver = getPrimaryDriver();
-  const reject = async (reason: string): Promise<CompleteObjectVerdict> => {
-    await driver.abortUpload(claims.storageKey, session.provider_upload_id).catch(() => undefined);
-    await driver.remove(claims.storageKey).catch(() => undefined);
-    await store.remove('upload_sessions', object.id);
-    await store.remove('objects', object.id);
-    await recordAudit(store, {
-      accountId: account.id,
-      kind: 'object.rejected',
-      detail: reason,
-      clientHash: input.clientHash ?? null,
-    });
-    return { status: 'rejected', reason };
-  };
 
+  /* All of the provider work happens here, outside any transaction: assemble
+     the object, then read it back and hash what was actually stored. */
   await driver.completeUpload(
     claims.storageKey,
     session.provider_upload_id,
     recorded.map((part) => ({ partNumber: part.partNumber, etag: part.etag })),
   );
-
   const stored = await hashStoredObject(claims.storageKey);
-  if (stored.bytes !== input.ciphertextBytes) {
-    return reject(
-      `the stored size (${String(stored.bytes)} bytes) is not the size the client reported (${String(input.ciphertextBytes)} bytes)`,
-    );
-  }
-  if (stored.sha256 !== input.ciphertextSha256) {
-    return reject('the stored bytes do not match the checksum the client computed');
+
+  const rejection =
+    stored.bytes !== input.ciphertextBytes
+      ? `the stored size (${String(stored.bytes)} bytes) is not the size the client reported (${String(input.ciphertextBytes)} bytes)`
+      : stored.sha256 !== input.ciphertextSha256
+        ? 'the stored bytes do not match the checksum the client computed'
+        : null;
+
+  if (rejection !== null) {
+    await driver.abortUpload(claims.storageKey, session.provider_upload_id).catch(() => undefined);
+    await driver.remove(claims.storageKey).catch(() => undefined);
+    await store.transaction(account.id, async (tx) => {
+      await tx.remove('upload_sessions', object.id);
+      await tx.remove('objects', object.id);
+      await recordAudit(tx, {
+        accountId: account.id,
+        kind: 'object.rejected',
+        detail: rejection,
+        clientHash: input.clientHash ?? null,
+      });
+    });
+    return { status: 'rejected', reason: rejection };
   }
 
+  /* Only now, in one short transaction, is it recorded as stored. */
   const now = Date.now();
-  await store.update('objects', object.id, {
-    state: 'primary_stored',
-    ciphertext_bytes: stored.bytes,
-    ciphertext_sha256: stored.sha256,
-    part_count: recorded.length,
-    updated_at_ms: now,
-  });
-  await store.remove('upload_sessions', object.id);
-
-  await store.insert('replicas', {
-    id: newId('rep'),
-    account_id: account.id,
-    object_id: object.id,
-    provider: driver.label,
-    location: driver.location,
-    state: 'verified',
-    ciphertext_sha256: stored.sha256,
-    ciphertext_bytes: stored.bytes,
-    attempts: 1,
-    last_error: null,
-    last_verified_ms: now,
-    created_at_ms: now,
-    updated_at_ms: now,
-  });
-
   const secondary = getSecondaryDriver();
-  if (secondary) {
-    await store.insert('replicas', {
+
+  await store.transaction(account.id, async (tx) => {
+    await tx.update('objects', object.id, {
+      state: 'primary_stored',
+      ciphertext_bytes: stored.bytes,
+      ciphertext_sha256: stored.sha256,
+      part_count: recorded.length,
+      updated_at_ms: now,
+    });
+    await tx.remove('upload_sessions', object.id);
+
+    await tx.insert('replicas', {
       id: newId('rep'),
       account_id: account.id,
       object_id: object.id,
-      provider: secondary.label,
-      location: secondary.location,
-      state: 'pending',
-      ciphertext_sha256: null,
-      ciphertext_bytes: 0,
-      attempts: 0,
+      provider: driver.label,
+      location: driver.location,
+      state: 'verified',
+      ciphertext_sha256: stored.sha256,
+      ciphertext_bytes: stored.bytes,
+      attempts: 1,
       last_error: null,
-      last_verified_ms: null,
+      last_verified_ms: now,
       created_at_ms: now,
       updated_at_ms: now,
     });
-  }
 
-  const importRow = await store.get('imports', object.import_id);
-  if (importRow) {
-    await store.update('imports', importRow.id, {
-      object_count: importRow.object_count + 1,
-      ciphertext_bytes: importRow.ciphertext_bytes + stored.bytes,
-      updated_at_ms: now,
-    });
-  }
+    if (secondary) {
+      await tx.insert('replicas', {
+        id: newId('rep'),
+        account_id: account.id,
+        object_id: object.id,
+        provider: secondary.label,
+        location: secondary.location,
+        state: 'pending',
+        ciphertext_sha256: null,
+        ciphertext_bytes: 0,
+        attempts: 0,
+        last_error: null,
+        last_verified_ms: null,
+        created_at_ms: now,
+        updated_at_ms: now,
+      });
+    }
+
+    const importRow = await tx.get('imports', object.import_id);
+    if (importRow) {
+      await tx.update('imports', importRow.id, {
+        object_count: importRow.object_count + 1,
+        ciphertext_bytes: importRow.ciphertext_bytes + stored.bytes,
+        updated_at_ms: now,
+      });
+    }
+  });
 
   return {
     status: 'stored',
@@ -397,7 +434,8 @@ export async function openObjectStream(
   const claims: TicketClaims = verifyTicket(ticket, { op: 'download', accountId, objectId });
   const object = await store.get('objects', objectId);
   if (!object || object.account_id !== accountId) throw notFound('That object does not exist.');
-  if (object.storage_key !== claims.storageKey) throw forbidden('That authorization does not match.');
+  if (object.storage_key !== claims.storageKey)
+    throw forbidden('That authorization does not match.');
 
   let lastError: unknown = null;
   for (const candidate of readOrder()) {

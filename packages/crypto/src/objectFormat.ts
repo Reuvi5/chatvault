@@ -399,7 +399,8 @@ export class ObjectReader {
     if (!this.sawFinal) {
       throw new AuthenticationError('Object is truncated: no final frame was present');
     }
-    if (this.queue.size !== 0) throw new AuthenticationError('Trailing bytes after the final frame');
+    if (this.queue.size !== 0)
+      throw new AuthenticationError('Trailing bytes after the final frame');
     return { frames: this.frameIndex, plaintextBytes: this.plaintextBytes };
   }
 }

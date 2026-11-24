@@ -143,7 +143,10 @@ export async function refreshConversationVerification(
   for (const conversation of conversations) {
     const objects = await store.find('objects', {
       equals: { conversation_id: conversation.id, account_id: accountId },
-      in: { column: 'state', values: ['pending', 'primary_stored', 'verified', 'replication_failed'] },
+      in: {
+        column: 'state',
+        values: ['pending', 'primary_stored', 'verified', 'replication_failed'],
+      },
       limit: 500_000,
     });
     const live = objects.filter((object) => object.state !== 'pending');
@@ -167,7 +170,10 @@ export async function refreshConversationVerification(
     });
     if (verified) {
       for (const importRow of importsForConversation) {
-        await store.update('imports', importRow.id, { state: 'verified', updated_at_ms: Date.now() });
+        await store.update('imports', importRow.id, {
+          state: 'verified',
+          updated_at_ms: Date.now(),
+        });
       }
     }
   }
@@ -238,7 +244,10 @@ export async function runReplication(
 export async function reconcile(
   store: Store,
   options: { sampleSize?: number } = {},
-): Promise<{ checked: number; mismatches: Array<{ objectId: string; provider: string; detail: string }> }> {
+): Promise<{
+  checked: number;
+  mismatches: Array<{ objectId: string; provider: string; detail: string }>;
+}> {
   const sampleSize = Math.min(Math.max(options.sampleSize ?? 20, 1), 500);
   const mismatches: Array<{ objectId: string; provider: string; detail: string }> = [];
 

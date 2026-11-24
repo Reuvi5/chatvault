@@ -8,7 +8,8 @@
  * strings are truncated, and byte arrays are reduced to their length.
  */
 
-const SENSITIVE_KEY = /(secret|token|ticket|password|passphrase|bundle|cookie|authorization|key)$/iu;
+const SENSITIVE_KEY =
+  /(secret|token|ticket|password|passphrase|bundle|cookie|authorization|key)$/iu;
 const MAX_STRING = 200;
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -16,7 +17,9 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 function redact(value: unknown, depth = 0): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
-    return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…[${String(value.length)} chars]` : value;
+    return value.length > MAX_STRING
+      ? `${value.slice(0, MAX_STRING)}…[${String(value.length)} chars]`
+      : value;
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {

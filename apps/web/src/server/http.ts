@@ -38,8 +38,7 @@ export const quotaExceeded = (message: string, details?: unknown) =>
   new HttpError(402, 'quota_exceeded', message, details);
 export const rateLimited = (message = 'Too many requests. Try again shortly.') =>
   new HttpError(429, 'rate_limited', message);
-export const notConfigured = (message: string) =>
-  new HttpError(501, 'not_configured', message);
+export const notConfigured = (message: string) => new HttpError(501, 'not_configured', message);
 
 export function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -79,7 +78,13 @@ export function errorResponse(error: unknown): Response {
   }
   if (error instanceof HttpError) {
     return jsonResponse(
-      { error: { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) } },
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(error.details === undefined ? {} : { details: error.details }),
+        },
+      },
       { status: error.status },
     );
   }

@@ -1,14 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-  BYTES_PER_GB,
-  formatBytes,
-  formatUsd,
-  type UsageResponse,
-} from '@chatvault/protocol';
+import { BYTES_PER_GB, formatBytes, formatUsd, type UsageResponse } from '@chatvault/protocol';
 import { ApiRequestError } from '@chatvault/client';
-import { Badge, Button, Card, Notice, Spinner, Stat } from '@/components/ui';
+import { Badge, Button, Card, LiveStatus, Notice, Skeleton, Stat } from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';
 
 export default function UsagePage() {
@@ -26,24 +21,47 @@ export default function UsagePage() {
   }, [api]);
 
   useEffect(() => {
-    void refresh();
+    let active = true;
+    void (async () => {
+      if (active) await refresh();
+    })();
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   if (!usage) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-10">
+      <main className="mx-auto max-w-3xl space-y-4 px-4 py-6">
+        <h1 className="text-xl font-semibold">Storage and billing</h1>
         {error ? (
           <Notice tone="danger">{error}</Notice>
         ) : (
-          <p className="muted flex items-center gap-2 text-sm">
-            <Spinner /> Loading usage…
-          </p>
+          <>
+            <LiveStatus>Loading your storage and billing figures</LiveStatus>
+            <Card className="p-5">
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div key={index} className="space-y-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-6 w-24" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card className="space-y-2 p-5">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-5/6" />
+            </Card>
+          </>
         )}
       </main>
     );
   }
 
-  const quotaUsed = usage.policy.quotaBytes > 0 ? usage.currentLogicalBytes / usage.policy.quotaBytes : 0;
+  const quotaUsed =
+    usage.policy.quotaBytes > 0 ? usage.currentLogicalBytes / usage.policy.quotaBytes : 0;
 
   return (
     <main className="mx-auto max-w-3xl space-y-4 px-4 py-6">
@@ -86,8 +104,8 @@ export default function UsagePage() {
             {BYTES_PER_GB.toLocaleString('en-US')} bytes.
           </li>
           <li>
-            Measured by integrating what you store over time, so adding data mid-month is prorated to
-            the hour.
+            Measured by integrating what you store over time, so adding data mid-month is prorated
+            to the hour.
           </li>
           <li>
             Billed once for your data. The second encrypted copy is kept at our cost, not yours.
@@ -137,7 +155,9 @@ export default function UsagePage() {
                   window.location.href = result.url;
                 } catch (caught) {
                   setError(
-                    caught instanceof ApiRequestError ? caught.message : 'Checkout failed to start.',
+                    caught instanceof ApiRequestError
+                      ? caught.message
+                      : 'Checkout failed to start.',
                   );
                 } finally {
                   setBusy(false);

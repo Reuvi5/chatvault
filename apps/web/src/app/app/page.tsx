@@ -3,7 +3,16 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { formatBytes } from '@chatvault/protocol';
-import { Badge, Button, Card, EmptyState, Notice, Spinner, TextInput } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  LiveStatus,
+  Notice,
+  SkeletonCard,
+  TextInput,
+} from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';
 import { GlobalSearch } from '@/components/GlobalSearch';
 
@@ -63,9 +72,16 @@ export default function ArchivePage() {
       </div>
 
       {conversationsLoading && conversations.length === 0 ? (
-        <p className="muted flex items-center gap-2 text-sm">
-          <Spinner /> Decrypting your conversation index…
-        </p>
+        <>
+          <LiveStatus>Decrypting your conversation index</LiveStatus>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <li key={index}>
+                <SkeletonCard />
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
 
       {conversations.some((entry) => entry.error) ? (
@@ -133,7 +149,9 @@ export default function ArchivePage() {
                     {manifest ? (
                       <>
                         {manifest.messageCount.toLocaleString('en-US')} messages ·{' '}
-                        {manifest.isGroup ? `${String(manifest.participants.length)} people` : '1:1'}{' '}
+                        {manifest.isGroup
+                          ? `${String(manifest.participants.length)} people`
+                          : '1:1'}{' '}
                         · {formatBytes(entry.summary.logicalBytes)}
                       </>
                     ) : (

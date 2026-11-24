@@ -33,7 +33,13 @@ export async function handleOpsStatus(request: Request): Promise<Response> {
   const store = await getStore();
   const usage = await measureUsage(store, account.id);
 
-  const states = ['pending', 'primary_stored', 'verified', 'replication_failed', 'trashed'] as const;
+  const states = [
+    'pending',
+    'primary_stored',
+    'verified',
+    'replication_failed',
+    'trashed',
+  ] as const;
   const objects: Record<string, number> = {};
   for (const state of states) {
     objects[state] = await store.count('objects', {

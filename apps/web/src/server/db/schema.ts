@@ -361,13 +361,15 @@ export function migrationSql(appRole = 'chatvault_app'): string {
 
   for (const table of TABLE_NAMES) {
     const def = SCHEMA[table];
-    const columns = (Object.entries(def.columns) as Array<[string, ColumnDef]>).map(([name, column]) => {
-      const parts = [`  ${name} ${SQL_TYPES[column.type]}`];
-      if (column.primaryKey) parts.push('PRIMARY KEY');
-      if (!column.nullable) parts.push('NOT NULL');
-      if (column.unique && !column.primaryKey) parts.push('UNIQUE');
-      return parts.join(' ');
-    });
+    const columns = (Object.entries(def.columns) as Array<[string, ColumnDef]>).map(
+      ([name, column]) => {
+        const parts = [`  ${name} ${SQL_TYPES[column.type]}`];
+        if (column.primaryKey) parts.push('PRIMARY KEY');
+        if (!column.nullable) parts.push('NOT NULL');
+        if (column.unique && !column.primaryKey) parts.push('UNIQUE');
+        return parts.join(' ');
+      },
+    );
     statements.push(
       `-- ${def.comment}`,
       `CREATE TABLE IF NOT EXISTS ${table} (\n${columns.join(',\n')}\n);`,

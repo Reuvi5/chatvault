@@ -12,7 +12,11 @@
  */
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { BYTES_PER_GB, DEFAULT_TRASH_RETENTION_DAYS, PRICE_USD_PER_GB_MONTH } from '@chatvault/protocol';
+import {
+  BYTES_PER_GB,
+  DEFAULT_TRASH_RETENTION_DAYS,
+  PRICE_USD_PER_GB_MONTH,
+} from '@chatvault/protocol';
 
 /*
  * Paths here are assembled from strings rather than with `node:path`.
@@ -57,6 +61,16 @@ export interface ProviderConfig {
   secretAccessKey?: string;
   /** Bytes per upload part. S3 multipart requires at least 5 MiB per part. */
   partSizeBytes: number;
+  /**
+   * Artificial delay per operation, for the local driver only.
+   *
+   * A local directory answers in microseconds, which hides everything latency
+   * does to an import: it is why a concurrency change looks like noise here and
+   * like a real difference against a bucket on the other side of the world. Set
+   * this to a plausible round trip (40-120ms) to see the real shape without a
+   * cloud account. Refused in production.
+   */
+  latencyMs: number;
 }
 
 export interface BillingConfig {
@@ -111,7 +125,11 @@ function developmentSecret(dataDir: string): string {
   return secret;
 }
 
-function provider(prefix: 'PRIMARY' | 'SECONDARY', dataDir: string, fallbackLabel: string): ProviderConfig | null {
+function provider(
+  prefix: 'PRIMARY' | 'SECONDARY',
+  dataDir: string,
+  fallbackLabel: string,
+): ProviderConfig | null {
   const kind = (process.env[`${prefix}_DRIVER`] ?? '').trim().toLowerCase();
   const bucket = process.env[`${prefix}_BUCKET`];
   const label = process.env[`${prefix}_LABEL`] ?? fallbackLabel;
@@ -126,6 +144,7 @@ function provider(prefix: 'PRIMARY' | 'SECONDARY', dataDir: string, fallbackLabe
       accessKeyId: process.env[`${prefix}_ACCESS_KEY_ID`],
       secretAccessKey: process.env[`${prefix}_SECRET_ACCESS_KEY`],
       partSizeBytes: number(process.env[`${prefix}_PART_SIZE_BYTES`], 8 * 1024 * 1024),
+      latencyMs: 0,
     };
   }
   if (kind === 'local' || kind === '') {
@@ -134,10 +153,11 @@ function provider(prefix: 'PRIMARY' | 'SECONDARY', dataDir: string, fallbackLabe
         label,
         kind: 'local',
         directory: absolutePath(
-        process.env.SECONDARY_DIRECTORY ?? childPath(dataDir, 'objects-secondary'),
-        dataDir,
-      ),
+          process.env.SECONDARY_DIRECTORY ?? childPath(dataDir, 'objects-secondary'),
+          dataDir,
+        ),
         partSizeBytes: number(process.env.SECONDARY_PART_SIZE_BYTES, 1024 * 1024),
+        latencyMs: number(process.env.SECONDARY_LATENCY_MS, 0),
       };
     }
     return {
@@ -149,6 +169,7 @@ function provider(prefix: 'PRIMARY' | 'SECONDARY', dataDir: string, fallbackLabe
         dataDir,
       ),
       partSizeBytes: number(process.env[`${prefix}_PART_SIZE_BYTES`], 1024 * 1024),
+      latencyMs: number(process.env[`${prefix}_LATENCY_MS`], 0),
     };
   }
   if (kind === 'none') return null;
@@ -156,7 +177,7 @@ function provider(prefix: 'PRIMARY' | 'SECONDARY', dataDir: string, fallbackLabe
 }
 
 function load(): Env {
-  const nodeEnv = (process.env.NODE_ENV ?? 'development') as Env['nodeEnv'];
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
   const isProduction = nodeEnv === 'production';
   const dataDir = absolutePath(process.env.CHATVAULT_DATA_DIR ?? '.data', process.cwd());
 
@@ -164,7 +185,8 @@ function load(): Env {
   if (!primary) throw new Error('A primary object store is required.');
   const secondary = provider('SECONDARY', dataDir, 'secondary');
 
-  const serverSecret = process.env.SERVER_SECRET ?? (isProduction ? '' : developmentSecret(dataDir));
+  const serverSecret =
+    process.env.SERVER_SECRET ?? (isProduction ? '' : developmentSecret(dataDir));
 
   const env: Env = {
     nodeEnv,
@@ -250,7 +272,8 @@ function load(): Env {
         );
       }
     }
-    if (env.simulatePrimaryDown) problems.push('SIMULATE_PRIMARY_DOWN must not be set in production.');
+    if (env.simulatePrimaryDown)
+      problems.push('SIMULATE_PRIMARY_DOWN must not be set in production.');
     if (problems.length > 0) throw new ConfigurationError(problems);
   }
 

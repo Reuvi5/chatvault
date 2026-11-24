@@ -15,7 +15,12 @@ export interface PasswordRecord {
   params: string;
 }
 
-function encodeParams(memoryKiB: number, iterations: number, parallelism: number, salt: Uint8Array) {
+function encodeParams(
+  memoryKiB: number,
+  iterations: number,
+  parallelism: number,
+  salt: Uint8Array,
+) {
   return `argon2id$m=${String(memoryKiB)},t=${String(iterations)},p=${String(parallelism)}$${Buffer.from(salt).toString('base64url')}`;
 }
 
@@ -58,10 +63,7 @@ export async function hashPassword(password: string): Promise<PasswordRecord> {
   };
 }
 
-export async function verifyPassword(
-  password: string,
-  record: PasswordRecord,
-): Promise<boolean> {
+export async function verifyPassword(password: string, record: PasswordRecord): Promise<boolean> {
   let parsed: ReturnType<typeof decodeParams>;
   try {
     parsed = decodeParams(record.params);

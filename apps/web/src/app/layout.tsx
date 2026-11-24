@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { THEME_BOOTSTRAP } from '@/themeBootstrap';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -19,7 +20,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Applies a saved theme before the first paint. Allowed by hash in the
+            Content-Security-Policy; see src/themeBootstrap.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+      </head>
       <body className="min-h-full antialiased">{children}</body>
     </html>
   );

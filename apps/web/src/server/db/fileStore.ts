@@ -13,7 +13,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  SERVICE_SCOPE,
+  type SERVICE_SCOPE,
   rowMatchesFilter,
   validateFilter,
   type Filter,
@@ -78,7 +78,7 @@ export class FileStore implements Store {
 
   private rowsOf(tables: Tables, table: TableName): Record<string, unknown>[] {
     tables[table] ??= [];
-    return tables[table] as Record<string, unknown>[];
+    return tables[table];
   }
 
   private normalise<T extends TableName>(table: T, row: RowOf<T>): Record<string, unknown> {
@@ -140,7 +140,10 @@ export class FileStore implements Store {
       });
     }
     const offset = options?.offset ?? 0;
-    const limited = options?.limit === undefined ? rows.slice(offset) : rows.slice(offset, offset + options.limit);
+    const limited =
+      options?.limit === undefined
+        ? rows.slice(offset)
+        : rows.slice(offset, offset + options.limit);
     return limited.map((row) => ({ ...row }) as RowOf<T>);
   }
 
@@ -227,7 +230,7 @@ export class FileStore implements Store {
   }
 
   async count<T extends TableName>(table: T, filter?: Filter<RowOf<T>>): Promise<number> {
-    return (await this.find(table, filter as FindOptions<RowOf<T>>)).length;
+    return (await this.find(table, filter)).length;
   }
 
   async sum<T extends TableName>(
@@ -236,7 +239,7 @@ export class FileStore implements Store {
     filter?: Filter<RowOf<T>>,
   ): Promise<number> {
     assertColumn(table, column);
-    const rows = await this.find(table, filter as FindOptions<RowOf<T>>);
+    const rows = await this.find(table, filter);
     return rows.reduce((total, row) => {
       const value = (row as Record<string, unknown>)[column];
       return total + (typeof value === 'number' ? value : 0);
@@ -257,7 +260,7 @@ export class FileStore implements Store {
       this.inTransaction = true;
       try {
         // The inner store shares state but bypasses the mutex (already held).
-        const result = await fn(new InnerFileStore(this) as unknown as Store);
+        const result = await fn(new InnerFileStore(this));
         this.inTransaction = wasInTransaction;
         await this.flush();
         return result;
@@ -419,9 +422,12 @@ class InnerFileStore implements Store {
     return this.parent.sum(table, column, filter);
   }
 
-  async transaction<R>(_scope: string | typeof SERVICE_SCOPE, fn: (tx: Store) => Promise<R>): Promise<R> {
+  async transaction<R>(
+    _scope: string | typeof SERVICE_SCOPE,
+    fn: (tx: Store) => Promise<R>,
+  ): Promise<R> {
     // Already inside one; nested transactions join the outer one.
-    return fn(this as unknown as Store);
+    return fn(this);
   }
 
   async close(): Promise<void> {

@@ -8,6 +8,11 @@
  * when the vault is locked — by the person, by the idle timer, or by closing the
  * tab. Reloading the page therefore means unlocking again, which is the correct
  * behaviour for an archive whose keys the server cannot hold.
+ *
+ * Two caches hang off the unlocked key, and both are cleared by locking:
+ * ciphertext objects as they were downloaded, and decrypted conversations
+ * re-encrypted under the vault's `index` subkey. The second is what makes
+ * reopening a large archive quick.
  */
 import {
   createContext,
@@ -24,21 +29,22 @@ import {
   ApiRequestError,
   ArchiveReader,
   createDefaultCache,
+  createMessageCache,
   type CiphertextCache,
   type ConversationEntry,
+  type MessageCache,
   type SessionInfo,
 } from '@chatvault/client';
 import {
   createVault as createVaultKeys,
+  deriveSubkey,
   lockVault,
   rewrapWithPassphrase,
   rotateRecoveryKey,
   unlockWithPassphrase,
   unlockWithRecoveryKey,
   type UnlockedVault,
-  type VaultBundle,
 } from '@chatvault/crypto';
-import type { VaultBundleWire } from '@chatvault/protocol';
 import type { CanonicalMessage } from '@chatvault/parser';
 
 export type VaultStatus = 'loading' | 'signed-out' | 'needs-setup' | 'locked' | 'unlocked';
@@ -56,6 +62,8 @@ export interface VaultContextValue {
   conversationsLoading: boolean;
   messagesByConversation: Record<string, CanonicalMessage[]>;
   loadProgress: { conversationId: string; done: number; total: number } | null;
+  /** Where the last conversation came from, for the interface to mention. */
+  lastLoadSource: 'cache' | 'network' | null;
   refreshSession: () => Promise<void>;
   refreshConversations: () => Promise<void>;
   loadMessages: (conversationId: string) => Promise<CanonicalMessage[]>;
@@ -77,19 +85,31 @@ export function useVault(): VaultContextValue {
 
 export function VaultProvider({ children }: { children: ReactNode }) {
   const api = useMemo(() => new ApiClient(), []);
-  const cacheRef = useRef<CiphertextCache | null>(null);
+
+  // Created once, lazily, during the first render on the client. A ref assigned
+  // during render would be a React rule violation; a state initialiser is the
+  // supported way to say "make this once".
+  const [ciphertextCache] = useState<CiphertextCache | null>(() =>
+    typeof window === 'undefined' ? null : createDefaultCache(),
+  );
+
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [vault, setVault] = useState<UnlockedVault | null>(null);
   const [reader, setReader] = useState<ArchiveReader | null>(null);
+  const [messageCache, setMessageCache] = useState<MessageCache | null>(null);
   const [conversations, setConversations] = useState<ConversationEntry[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [messagesByConversation, setMessages] = useState<Record<string, CanonicalMessage[]>>({});
   const [loadProgress, setLoadProgress] = useState<VaultContextValue['loadProgress']>(null);
+  const [lastLoadSource, setLastLoadSource] = useState<'cache' | 'network' | null>(null);
 
-  if (!cacheRef.current && typeof window !== 'undefined') {
-    cacheRef.current = createDefaultCache();
-  }
+  // A stable view of the loaded conversations, so `loadMessages` does not have
+  // to change identity every time a conversation finishes loading.
+  const messagesRef = useRef<Record<string, CanonicalMessage[]>>({});
+  useEffect(() => {
+    messagesRef.current = messagesByConversation;
+  }, [messagesByConversation]);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -101,18 +121,37 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
   }, [api]);
 
+  /* Load the session once on mount. The work happens in an async function so
+     no state is set synchronously during the effect, and the `active` flag stops
+     a slow response from landing after the component has gone. */
   useEffect(() => {
-    void refreshSession();
-  }, [refreshSession]);
+    let active = true;
+    void (async () => {
+      try {
+        const current = await api.session();
+        if (active) setSession(current);
+      } catch {
+        if (active) setSession(null);
+      } finally {
+        if (active) setSessionLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [api]);
 
   const lock = useCallback(async () => {
     if (vault) lockVault(vault);
     setVault(null);
     setReader(null);
+    setMessageCache(null);
     setConversations([]);
     setMessages({});
-    await cacheRef.current?.clear();
-  }, [vault]);
+    setLastLoadSource(null);
+    await ciphertextCache?.clear();
+    await messageCache?.clear();
+  }, [vault, ciphertextCache, messageCache]);
 
   /* Idle lock: an unattended tab should not stay readable. */
   useEffect(() => {
@@ -137,13 +176,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const created = await ArchiveReader.create({
         api,
         vault: unlocked,
-        ...(cacheRef.current ? { cache: cacheRef.current } : {}),
+        ...(ciphertextCache ? { cache: ciphertextCache } : {}),
       });
+      const cache =
+        typeof window === 'undefined'
+          ? null
+          : createMessageCache(await deriveSubkey(unlocked.key, 'index'));
       setVault(unlocked);
       setReader(created);
+      setMessageCache(cache);
       return created;
     },
-    [api],
+    [api, ciphertextCache],
   );
 
   const refreshConversationsWith = useCallback(async (activeReader: ArchiveReader | null) => {
@@ -164,7 +208,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const setupVault = useCallback(
     async (passphrase: string, timeZone: string) => {
       const created = await createVaultKeys(passphrase);
-      await api.createVault(created.vault.bundle as unknown as VaultBundleWire, timeZone);
+      await api.createVault(created.vault.bundle, timeZone);
       await refreshSession();
       const activeReader = await openReader(created.vault);
       await refreshConversationsWith(activeReader);
@@ -175,7 +219,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const unlock = useCallback(
     async (secret: string, kind: 'passphrase' | 'recovery') => {
-      const bundle = session?.vault?.bundle as unknown as VaultBundle | undefined;
+      /* The wire shape and the crypto shape are checked against each other here
+         rather than cast past each other: if they ever diverge, this stops
+         compiling instead of failing at unlock time. */
+      const bundle = session?.vault?.bundle;
       if (!bundle) throw new Error('This account has no archive key yet.');
       const unlocked =
         kind === 'passphrase'
@@ -191,7 +238,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     async (next: string) => {
       if (!vault) throw new Error('Unlock the archive first.');
       const bundle = await rewrapWithPassphrase(vault, next);
-      await api.updateVaultBundle(bundle as unknown as VaultBundleWire, vault.keyId);
+      await api.updateVaultBundle(bundle, vault.keyId);
       await refreshSession();
     },
     [api, refreshSession, vault],
@@ -200,29 +247,53 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const newRecoveryKey = useCallback(async () => {
     if (!vault) throw new Error('Unlock the archive first.');
     const rotated = await rotateRecoveryKey(vault);
-    await api.updateVaultBundle(rotated.bundle as unknown as VaultBundleWire, vault.keyId);
+    await api.updateVaultBundle(rotated.bundle, vault.keyId);
     await refreshSession();
     return rotated.recoveryKeyDisplay;
   }, [api, refreshSession, vault]);
 
+  /**
+   * Load a conversation's messages.
+   *
+   * In order: already in memory, then the encrypted local cache, then the
+   * archive itself — which is the only path that costs round trips, and the only
+   * one that reports progress.
+   */
   const loadMessages = useCallback(
     async (conversationId: string) => {
-      const cached = messagesByConversation[conversationId];
-      if (cached) return cached;
+      const inMemory = messagesRef.current[conversationId];
+      if (inMemory) return inMemory;
+
       const entry = conversations.find((candidate) => candidate.summary.id === conversationId);
-      if (!entry?.manifest || !reader) return [];
-      setLoadProgress({ conversationId, done: 0, total: entry.manifest.pages.length });
+      const manifest = entry?.manifest;
+      if (!manifest || !reader) return [];
+
+      const cached = await messageCache?.read(conversationId, manifest.manifestVersion);
+      if (cached) {
+        setMessages((previous) => ({ ...previous, [conversationId]: cached }));
+        setLastLoadSource('cache');
+        return cached;
+      }
+
+      setLoadProgress({ conversationId, done: 0, total: manifest.pages.length });
       try {
-        const loaded = await reader.loadMessages(entry.manifest, {
+        const loaded = await reader.loadMessages(manifest, {
           onProgress: (done, total) => setLoadProgress({ conversationId, done, total }),
         });
         setMessages((previous) => ({ ...previous, [conversationId]: loaded }));
+        setLastLoadSource('network');
+        // Best effort: a cache that cannot be written is not a failed load.
+        try {
+          await messageCache?.write(conversationId, manifest.manifestVersion, loaded);
+        } catch {
+          /* ignore */
+        }
         return loaded;
       } finally {
         setLoadProgress(null);
       }
     },
-    [conversations, messagesByConversation, reader],
+    [conversations, reader, messageCache],
   );
 
   const signOut = useCallback(async () => {
@@ -257,6 +328,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     conversationsLoading,
     messagesByConversation,
     loadProgress,
+    lastLoadSource,
     refreshSession,
     refreshConversations,
     loadMessages,
