@@ -7,3 +7,4 @@ export * from './messageCache';
 export * from './pool';
 export * from './reader';
 export * from './search';
+export * from './insights';

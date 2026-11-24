@@ -25,6 +25,7 @@ import {
 } from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';
 import { MessageTimeline } from '@/components/MessageTimeline';
+import { ChatInsights } from '@/components/ChatInsights';
 
 /** One shared empty list, so "no messages yet" is identity-stable. */
 const NO_MESSAGES: readonly CanonicalMessage[] = [];
@@ -61,6 +62,7 @@ export default function ConversationPage() {
   const [report, setReport] = useState<IntegrityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showWarnings, setShowWarnings] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const highlightParam = search.get('at');
@@ -220,6 +222,13 @@ export default function ConversationPage() {
               ))}
             </select>
           ) : null}
+          <Button
+            disabled={!loaded}
+            aria-expanded={showInsights}
+            onClick={() => setShowInsights(!showInsights)}
+          >
+            {showInsights ? 'Hide insights' : 'Insights'}
+          </Button>
           {manifest.warnings.length > 0 ? (
             <Button onClick={() => setShowWarnings(!showWarnings)}>
               {showWarnings ? 'Hide' : 'Show'} coverage notes ({manifest.warnings.length})
@@ -272,6 +281,8 @@ export default function ConversationPage() {
           <ProgressBar value={progress.done} max={Math.max(1, progress.total)} />
         </Card>
       ) : null}
+
+      {showInsights && loaded ? <ChatInsights messages={messages} /> : null}
 
       {hits.length > 0 ? (
         <Card className="mb-4 divide-y hairline p-0">
