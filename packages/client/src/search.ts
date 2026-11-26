@@ -171,13 +171,15 @@ export function searchCorpora(
 export function dateIndex(
   messages: readonly CanonicalMessage[],
 ): Array<{ date: string; index: number }> {
+  /* One entry per date, pointing at its first message. A message stamped out
+     of order would otherwise list a date twice. */
+  const seen = new Set<string>();
   const out: Array<{ date: string; index: number }> = [];
-  let current = '';
   for (let index = 0; index < messages.length; index += 1) {
     const date = (messages[index] as CanonicalMessage).localTs.slice(0, 10);
-    if (date !== current) {
+    if (!seen.has(date)) {
+      seen.add(date);
       out.push({ date, index });
-      current = date;
     }
   }
   return out;

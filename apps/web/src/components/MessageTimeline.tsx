@@ -3,8 +3,11 @@
 /**
  * The conversation view.
  *
- * Familiar chat shape — bubbles, sender labels, date separators — built from
- * scratch, with no third-party assets.
+ * The familiar chat shape — bubbles, runs of consecutive messages, avatars,
+ * date separators, a tail on the first bubble of each run — built from scratch.
+ * None of WhatsApp's artwork, palette or wordmarks appear here; what is borrowed
+ * is the layout grammar that every chat app shares, because that grammar is what
+ * makes a transcript readable.
  *
  * How this stays usable at a hundred thousand messages:
  *
@@ -18,51 +21,28 @@
  *  - Which days are mounted is *derived*, not stored in an effect: a deep link
  *    into an old day widens the window during render, so there is no second
  *    render pass and no flash of the wrong content.
+ *
+ * Two conventions from the screenshot are deliberately absent. There are no
+ * delivery or read ticks: this is an archive, it has no delivery state, and a
+ * tick would assert something the export does not know. And there are no quoted
+ * replies: WhatsApp's text export drops reply metadata, so a quote block here
+ * could only be guesswork.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationManifest, ManifestAttachmentRef } from '@chatvault/protocol';
 import type { CanonicalMessage } from '@chatvault/parser';
 import { Badge, Button, cx } from '@/components/ui';
 import { Attachment } from '@/components/Attachment';
+import { Avatar, SenderName } from '@/components/Avatar';
+import {
+  formatClock,
+  formatDayHeading,
+  groupConversation,
+  type MessageRun,
+} from '@/lib/conversationLayout';
 
 /** Days added each time the reader reaches the top of what is mounted. */
 const DAYS_PER_STEP = 14;
-
-interface Day {
-  date: string;
-  messages: Array<{ message: CanonicalMessage; index: number }>;
-}
-
-function groupByDay(messages: readonly CanonicalMessage[]): Day[] {
-  const days: Day[] = [];
-  let current: Day | null = null;
-  for (let index = 0; index < messages.length; index += 1) {
-    const message = messages[index] as CanonicalMessage;
-    const date = message.localTs.slice(0, 10);
-    if (!current || current.date !== date) {
-      current = { date, messages: [] };
-      days.push(current);
-    }
-    current.messages.push({ message, index });
-  }
-  return days;
-}
-
-function formatDay(date: string): string {
-  const parsed = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-function timeOf(localTs: string, precision: 'minute' | 'second'): string {
-  return precision === 'second' ? localTs.slice(11, 19) : localTs.slice(11, 16);
-}
 
 export function MessageTimeline({
   manifest,
@@ -75,7 +55,7 @@ export function MessageTimeline({
   selfName: string | null;
   highlightIndex?: number | null;
 }) {
-  const days = useMemo(() => groupByDay(messages), [messages]);
+  const days = useMemo(() => groupConversation(messages, { selfName }), [messages, selfName]);
   const attachmentsByName = useMemo(() => {
     const map = new Map<string, ManifestAttachmentRef>();
     for (const item of manifest.attachments) map.set(item.fileName, item);
@@ -90,7 +70,9 @@ export function MessageTimeline({
      rendering, rather than correcting it afterwards in an effect. */
   const highlightDay = useMemo(() => {
     if (highlightIndex === null || highlightIndex === undefined) return -1;
-    return days.findIndex((day) => day.messages.some((entry) => entry.index === highlightIndex));
+    return days.findIndex((day) =>
+      day.runs.some((run) => run.messages.some((entry) => entry.index === highlightIndex)),
+    );
   }, [days, highlightIndex]);
 
   const daysNeededForHighlight = highlightDay >= 0 ? days.length - highlightDay : 0;
@@ -99,7 +81,7 @@ export function MessageTimeline({
   const visibleDays = days.slice(firstDay);
   const hiddenMessages = days
     .slice(0, firstDay)
-    .reduce((total, day) => total + day.messages.length, 0);
+    .reduce((total, day) => total + day.messageCount, 0);
 
   /* Grow the window as the reader scrolls back past the oldest mounted day. */
   useEffect(() => {
@@ -123,7 +105,7 @@ export function MessageTimeline({
   }, [highlightIndex, firstDay]);
 
   return (
-    <div className="space-y-4">
+    <div className="chat-surface space-y-3 rounded-xl py-3">
       {firstDay > 0 ? (
         <div
           ref={sentinelRef}
@@ -143,83 +125,26 @@ export function MessageTimeline({
 
       {visibleDays.map((day) => (
         <section
-          key={day.date}
-          className="day-section space-y-1.5"
-          aria-label={formatDay(day.date)}
+          key={day.key}
+          className="day-section space-y-2"
+          aria-label={formatDayHeading(day.date)}
         >
           <div className="sticky top-14 z-10 flex justify-center py-1">
-            <h3 className="sunken rounded-full border hairline px-3 py-1 text-xs font-medium">
-              {formatDay(day.date)}
+            <h3 className="day-chip rounded-lg px-2.5 py-1 text-[11px] font-medium tracking-wide uppercase">
+              {formatDayHeading(day.date)}
             </h3>
           </div>
 
-          {day.messages.map(({ message, index }) => {
-            if (message.kind === 'system') {
-              return (
-                <p
-                  key={index}
-                  id={`m${String(index)}`}
-                  className="muted mx-auto max-w-2xl px-3 py-1 text-center text-xs leading-relaxed"
-                >
-                  {message.body}
-                </p>
-              );
-            }
-
-            const mine = selfName !== null && message.sender === selfName;
-            const attachment = message.attachmentFileName
-              ? attachmentsByName.get(message.attachmentFileName)
-              : undefined;
-            const isHighlighted = highlightIndex === index;
-
-            return (
-              <div
-                key={index}
-                id={`m${String(index)}`}
-                ref={isHighlighted ? highlightRef : undefined}
-                className={cx('flex px-2', mine ? 'justify-end' : 'justify-start')}
-              >
-                <div
-                  className={cx(
-                    'max-w-[min(42rem,85%)] space-y-1.5 rounded-2xl border hairline px-3 py-2 text-sm shadow-sm',
-                    mine ? 'bubble-me rounded-br-md' : 'bubble-them rounded-bl-md',
-                    isHighlighted && 'ring-2 ring-accent-400',
-                  )}
-                >
-                  {!mine && manifest.isGroup ? (
-                    <p className="text-xs font-semibold text-accent-600 dark:text-accent-300">
-                      {message.sender}
-                    </p>
-                  ) : null}
-
-                  {message.flags.deleted ? (
-                    <p className="muted italic">This message was deleted</p>
-                  ) : message.flags.mediaOmitted ? (
-                    <p className="muted italic">
-                      Media was not included in this export
-                      <span className="not-italic"> — </span>
-                      <span className="not-italic text-xs">{message.body}</span>
-                    </p>
-                  ) : null}
-
-                  {attachment ? <Attachment attachment={attachment} /> : null}
-
-                  {message.body && !message.flags.deleted && !message.flags.mediaOmitted ? (
-                    <p className="wrap-anywhere whitespace-pre-wrap leading-relaxed">
-                      {message.body}
-                    </p>
-                  ) : null}
-
-                  <p className="muted flex items-center justify-end gap-1.5 text-[11px]">
-                    {message.flags.edited ? <span title="Edited after sending">edited</span> : null}
-                    <time dateTime={message.localTs}>
-                      {timeOf(message.localTs, message.tsPrecision)}
-                    </time>
-                  </p>
-                </div>
-              </div>
-            );
-          })}
+          {day.runs.map((run, runIndex) => (
+            <Run
+              key={`${day.key}:${String(runIndex)}`}
+              run={run}
+              isGroup={manifest.isGroup}
+              attachmentsByName={attachmentsByName}
+              highlightIndex={highlightIndex ?? null}
+              highlightRef={highlightRef}
+            />
+          ))}
         </section>
       ))}
 
@@ -233,6 +158,125 @@ export function MessageTimeline({
           </span>
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * One run: consecutive messages from the same person, close together in time.
+ * The name and the avatar appear once, on the first bubble, and the tail is
+ * drawn there too — so a burst of five messages reads as one turn in the
+ * conversation rather than five separate events.
+ */
+function Run({
+  run,
+  isGroup,
+  attachmentsByName,
+  highlightIndex,
+  highlightRef,
+}: {
+  run: MessageRun;
+  isGroup: boolean;
+  attachmentsByName: Map<string, ManifestAttachmentRef>;
+  highlightIndex: number | null;
+  highlightRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  /* System notices are not from anybody: centred, no bubble, no attribution. */
+  if (run.sender === null) {
+    return (
+      <>
+        {run.messages.map(({ message, index }) => (
+          <p
+            key={index}
+            id={`m${String(index)}`}
+            className="system-notice mx-auto max-w-xl px-3 py-1 text-center text-[11px] leading-relaxed"
+          >
+            {message.body}
+          </p>
+        ))}
+      </>
+    );
+  }
+
+  const { mine, sender } = run;
+  const showAvatar = !mine && isGroup;
+
+  return (
+    <div className={cx('flex items-start gap-1.5 px-1.5', mine ? 'justify-end' : 'justify-start')}>
+      {showAvatar ? <Avatar name={sender} size={28} className="mt-0.5" /> : null}
+
+      <div
+        className={cx(
+          'flex min-w-0 max-w-[min(42rem,85%)] flex-col gap-[3px]',
+          mine ? 'items-end' : 'items-start',
+        )}
+      >
+        {run.messages.map(({ message, index }, position) => {
+          const attachment = message.attachmentFileName
+            ? attachmentsByName.get(message.attachmentFileName)
+            : undefined;
+          const isHighlighted = highlightIndex === index;
+          const first = position === 0;
+          const hasBody = Boolean(message.body) && !message.flags.deleted;
+
+          return (
+            <div
+              key={index}
+              id={`m${String(index)}`}
+              ref={isHighlighted ? highlightRef : undefined}
+              className={cx(
+                'relative max-w-full px-2.5 py-1.5 text-sm',
+                mine ? 'bubble-me' : 'bubble-them',
+                first && (mine ? 'bubble-tail-me' : 'bubble-tail-them'),
+                isHighlighted && 'ring-2 ring-accent-400',
+              )}
+            >
+              {first && showAvatar ? <SenderName name={sender} className="mb-0.5 block" /> : null}
+
+              {message.flags.deleted ? (
+                <p className="muted italic">This message was deleted</p>
+              ) : message.flags.mediaOmitted ? (
+                <p className="muted italic">
+                  Media was not included in this export
+                  <span className="not-italic"> — </span>
+                  <span className="not-italic text-xs">{message.body}</span>
+                </p>
+              ) : null}
+
+              {attachment ? (
+                <div className={cx(hasBody && 'mb-1')}>
+                  <Attachment attachment={attachment} />
+                </div>
+              ) : null}
+
+              {/* The clock sits on the last line, and floats right of the text
+                  the way every chat app does it, so a one-word message stays
+                  one line instead of growing a second. */}
+              {hasBody && !message.flags.mediaOmitted ? (
+                <p className="wrap-anywhere whitespace-pre-wrap leading-relaxed">
+                  {message.body}
+                  <span className="bubble-clock" aria-hidden="true">
+                    {message.flags.edited ? 'edited · ' : ''}
+                    {formatClock(message.localTs, message.tsPrecision)}
+                  </span>
+                </p>
+              ) : null}
+
+              <p
+                className={cx(
+                  'bubble-meta muted text-[11px] tabular-nums',
+                  hasBody && !message.flags.mediaOmitted ? 'sr-only' : 'text-right',
+                )}
+              >
+                {message.flags.edited ? <span>edited · </span> : null}
+                <time dateTime={message.localTs}>
+                  {formatClock(message.localTs, message.tsPrecision)}
+                </time>
+              </p>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

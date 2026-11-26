@@ -6,12 +6,22 @@
  * Media is fetched as ciphertext, decrypted in memory and rendered from a blob
  * URL. Nothing is written to disk unless the person downloads it, and the blob
  * URL is revoked when the component goes away.
+ *
+ * The decrypted bytes are kept alongside the URL because the voice-note player
+ * needs them: it decodes the audio to draw a waveform from the real amplitude
+ * rather than a decorative one.
  */
 import { useEffect, useRef, useState } from 'react';
 import { formatBytes, type ManifestAttachmentRef } from '@chatvault/protocol';
 import { Badge, Button, Spinner, cx } from '@/components/ui';
 import { Lightbox } from '@/components/Lightbox';
+import { VoiceNote } from '@/components/VoiceNote';
 import { useVault } from '@/components/VaultProvider';
+
+interface Loaded {
+  url: string;
+  bytes: Uint8Array;
+}
 
 export function Attachment({
   attachment,
@@ -21,7 +31,7 @@ export function Attachment({
   compact?: boolean;
 }) {
   const { reader } = useVault();
-  const [url, setUrl] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -35,7 +45,7 @@ export function Attachment({
   );
 
   const load = async () => {
-    if (url || busy || !reader) return;
+    if (loaded || busy || !reader) return;
     setBusy(true);
     setError(null);
     try {
@@ -43,7 +53,7 @@ export function Attachment({
       const blob = new Blob([bytes as unknown as BlobPart], { type: mimeType });
       const objectUrl = URL.createObjectURL(blob);
       urlRef.current = objectUrl;
-      setUrl(objectUrl);
+      setLoaded({ url: objectUrl, bytes });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'That attachment could not be opened.');
     } finally {
@@ -73,7 +83,7 @@ export function Attachment({
     </span>
   );
 
-  if (!url) {
+  if (!loaded) {
     return (
       <button
         type="button"
@@ -99,15 +109,14 @@ export function Attachment({
           {/* A plain <img>: the source is an in-memory blob of a decrypted
               attachment, so Next's image optimiser has nothing to work with. */}
           <img
-            src={url}
+            src={loaded.url}
             alt={attachment.fileName}
-            className={cx('rounded-lg border hairline', compact ? 'max-h-40' : 'max-h-72')}
+            className={cx('rounded-lg', compact ? 'max-h-40' : 'max-h-80')}
           />
         </button>
-        <figcaption className="muted text-[11px]">{label}</figcaption>
         <Lightbox open={expanded} onClose={() => setExpanded(false)} label={attachment.fileName}>
           <img
-            src={url}
+            src={loaded.url}
             alt={attachment.fileName}
             className="max-h-[80vh] rounded-lg object-contain"
           />
@@ -119,10 +128,10 @@ export function Attachment({
   if (attachment.kind === 'video') {
     return (
       <div className="space-y-1">
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption --
-            This is a video out of someone's own archive. No caption track
-            exists, and inventing one would be worse than having none. */}
-        <video src={url} controls className="max-h-72 w-full rounded-lg border hairline" />
+        {/* A video out of someone's own archive. No caption track exists, and
+            inventing one would be worse than having none. */}
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video src={loaded.url} controls className="max-h-80 w-full rounded-lg" />
         <p className="muted text-[11px]">{label}</p>
       </div>
     );
@@ -130,21 +139,24 @@ export function Attachment({
 
   if (attachment.kind === 'audio') {
     return (
-      <div className="space-y-1">
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption --
-            An archived voice note has no caption track to offer. */}
-        <audio src={url} controls className="w-full" />
-        <p className="muted text-[11px]">{label}</p>
-      </div>
+      <VoiceNote
+        bytes={loaded.bytes}
+        url={loaded.url}
+        fileName={attachment.fileName}
+        byteLength={attachment.byteLength}
+      />
     );
   }
 
   return (
-    <div className="sunken space-y-2 rounded-lg border hairline p-2.5 text-xs">
-      <p>{label}</p>
-      <Button onClick={() => window.open(url, '_blank', 'noopener')}>Open</Button>
-      <a href={url} download={attachment.fileName} className="ml-2 underline">
-        Download
+    <div className="sunken flex items-center gap-2.5 rounded-lg border hairline p-2.5 text-xs">
+      <span aria-hidden="true" className="text-base">
+        📄
+      </span>
+      <span className="min-w-0 flex-1">{label}</span>
+      <Button onClick={() => window.open(loaded.url, '_blank', 'noopener')}>Open</Button>
+      <a href={loaded.url} download={attachment.fileName} className="underline">
+        Save
       </a>
     </div>
   );

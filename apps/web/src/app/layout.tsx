@@ -2,6 +2,16 @@ import type { Metadata, Viewport } from 'next';
 import { THEME_BOOTSTRAP } from '@/themeBootstrap';
 import './globals.css';
 
+/*
+ * Rendered per request, not prerendered.
+ *
+ * The Content-Security-Policy gives each response a fresh nonce, and a page
+ * baked at build time cannot carry it — see src/csp.ts. Nothing is lost: every
+ * page here is a client component behind a passphrase, so there is no server
+ * HTML worth caching.
+ */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'ChatVault — your chat history, preserved',
   description:

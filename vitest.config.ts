@@ -15,7 +15,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['packages/**/*.test.ts', 'apps/web/tests/**/*.test.ts'],
+    include: ['packages/**/*.test.ts', 'apps/web/src/**/*.test.ts', 'apps/web/tests/**/*.test.ts'],
     // Argon2id with production parameters is intentionally slow.
     testTimeout: 60_000,
     hookTimeout: 60_000,

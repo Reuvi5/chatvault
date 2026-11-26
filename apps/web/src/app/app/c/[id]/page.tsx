@@ -26,6 +26,8 @@ import {
 import { useVault } from '@/components/VaultProvider';
 import { MessageTimeline } from '@/components/MessageTimeline';
 import { ChatInsights } from '@/components/ChatInsights';
+import { Avatar } from '@/components/Avatar';
+import { participantLine } from '@/lib/conversationLayout';
 
 /** One shared empty list, so "no messages yet" is identity-stable. */
 const NO_MESSAGES: readonly CanonicalMessage[] = [];
@@ -114,11 +116,52 @@ export default function ConversationPage() {
   }
 
   if (!manifest) {
+    /*
+     * An import that died partway leaves a conversation row with no manifest.
+     * Everything below this point needs the manifest, so without an exit here
+     * the row is stranded in the archive list with no way to remove it — which
+     * is exactly what happened the first time a real import hit the upload
+     * rate limit.
+     */
+    const neverFinished = entry.summary.manifestObjectId === null;
     return (
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <Notice tone="danger" title="This conversation could not be decrypted">
-          {entry.error ?? 'The index for this conversation is unreadable with the current key.'}
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-10">
+        <Notice
+          tone="danger"
+          title={
+            neverFinished ? 'This import never finished' : 'This conversation could not be read'
+          }
+        >
+          {neverFinished
+            ? 'No index was ever written for this conversation, so there is nothing to read. Nothing was lost: whatever did upload is unreferenced, and removing this entry releases it. Import the export again to retry.'
+            : (entry.error ??
+              'The index for this conversation is unreadable with the current key.')}
         </Notice>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="danger"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  'Remove this entry from your archive? It moves to the trash, and stays restorable for the retention window.',
+                )
+              ) {
+                return;
+              }
+              await api.deleteConversation(conversationId, 'trash');
+              await refreshConversations();
+              router.push('/app');
+            }}
+          >
+            Remove from archive
+          </Button>
+          <Link href="/app/import" className="underline">
+            Import it again
+          </Link>
+          <Link href="/app" className="muted underline">
+            Back to the archive
+          </Link>
+        </div>
       </main>
     );
   }
@@ -130,6 +173,7 @@ export default function ConversationPage() {
     <main className="mx-auto max-w-4xl px-4 py-5">
       <header className="mb-4 space-y-3">
         <div className="flex flex-wrap items-start gap-3">
+          <Avatar name={manifest.title} size={44} className="mt-0.5" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-semibold">{manifest.title}</h1>
@@ -141,10 +185,13 @@ export default function ConversationPage() {
                 <Badge tone="warn">Backing up</Badge>
               )}
             </div>
+            {/* Who is in the conversation, named, the way a chat header reads —
+                rather than a count, which tells you nothing you wanted. */}
+            <p className="mt-0.5 truncate text-xs" title={manifest.participants.join(', ')}>
+              {participantLine(manifest.participants, selfName)}
+            </p>
             <p className="muted mt-1 text-xs">
               {manifest.messageCount.toLocaleString('en-US')} messages ·{' '}
-              {manifest.participants.length} participant
-              {manifest.participants.length === 1 ? '' : 's'} ·{' '}
               {formatBytes(entry.summary.logicalBytes)} · imported {manifest.imports.length} time
               {manifest.imports.length === 1 ? '' : 's'}
             </p>

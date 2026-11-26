@@ -64,7 +64,24 @@
   --text: var(--color-ink-900);
   --text-muted: var(--color-ink-500);
   --bubble-them: #ffffff;
-  --bubble-me: var(--color-accent-100);
+  /*
+   * Outgoing bubbles are green, because a warm/cool split between the two
+   * sides is what makes a transcript scannable at a glance. This is a sage
+   * green of our own — cooler and less saturated than the yellow-green other
+   * chat apps use — so the convention is shared but the palette is ours.
+   */
+  --bubble-me: #d5ece1;
+  --bubble-shadow: 0 1px 1px rgb(23 29 46 / 0.12);
+  --chat-bg: var(--color-ink-100);
+  --chat-dot: rgb(100 110 143 / 0.16);
+  /* Per-participant colour: the hue comes from the element, the lightness and
+     saturation from the theme, so a name stays legible on both surfaces. */
+  --sender-s-bg: 58%;
+  --sender-l-bg: 88%;
+  --sender-s-fg: 45%;
+  --sender-l-fg: 30%;
+  --sender-s-name: 52%;
+  --sender-l-name: 36%;
 }
 
 [data-theme='dark'] {
@@ -75,7 +92,16 @@
   --text: var(--color-ink-100);
   --text-muted: var(--color-ink-400);
   --bubble-them: var(--color-ink-800);
-  --bubble-me: #2a2060;
+  --bubble-me: #2d4d41;
+  --bubble-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  --chat-bg: var(--surface-sunken);
+  --chat-dot: rgb(180 187 211 / 0.1);
+  --sender-s-bg: 32%;
+  --sender-l-bg: 30%;
+  --sender-s-fg: 60%;
+  --sender-l-fg: 82%;
+  --sender-s-name: 65%;
+  --sender-l-name: 72%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -87,7 +113,16 @@
     --text: var(--color-ink-100);
     --text-muted: var(--color-ink-400);
     --bubble-them: var(--color-ink-800);
-    --bubble-me: #2a2060;
+    --bubble-me: #2d4d41;
+    --bubble-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+    --chat-bg: var(--surface-sunken);
+    --chat-dot: rgb(180 187 211 / 0.1);
+    --sender-s-bg: 32%;
+    --sender-l-bg: 30%;
+    --sender-s-fg: 60%;
+    --sender-l-fg: 82%;
+    --sender-s-name: 65%;
+    --sender-l-name: 72%;
   }
 }
 
@@ -127,11 +162,103 @@ body {
   .hairline {
     border-color: var(--border);
   }
+  /*
+   * The conversation surface.
+   *
+   * A field of faint dots at two scales: enough texture that the bubbles read
+   * as sitting on something rather than floating on a flat page, drawn
+   * entirely in CSS, and not an imitation of anyone's illustrated wallpaper.
+   */
+  .chat-surface {
+    background-color: var(--chat-bg);
+    background-image:
+      radial-gradient(circle at 25% 30%, var(--chat-dot) 1px, transparent 1.3px),
+      radial-gradient(circle at 70% 65%, var(--chat-dot) 1px, transparent 1.3px);
+    background-size:
+      44px 44px,
+      68px 68px;
+  }
+
+  /*
+   * Bubbles carry no border: a hairline plus a tail reads as a sticker, where
+   * a shadow alone lifts the bubble off the surface.
+   */
+  .bubble-them,
+  .bubble-me {
+    border-radius: 0.55rem;
+    box-shadow: var(--bubble-shadow);
+  }
   .bubble-them {
     background: var(--bubble-them);
   }
   .bubble-me {
     background: var(--bubble-me);
+  }
+
+  /* The tail: one squared corner, and a triangle flaring out of it. */
+  .bubble-tail-them {
+    border-top-left-radius: 0;
+  }
+  .bubble-tail-them::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -7px;
+    width: 7px;
+    height: 12px;
+    background: var(--bubble-them);
+    clip-path: polygon(100% 0, 100% 100%, 0 0);
+  }
+  .bubble-tail-me {
+    border-top-right-radius: 0;
+  }
+  .bubble-tail-me::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -7px;
+    width: 7px;
+    height: 12px;
+    background: var(--bubble-me);
+    clip-path: polygon(0 0, 0 100%, 100% 0);
+  }
+
+  /*
+   * The clock tucks into the end of the last line, so a short message stays
+   * one line instead of growing a second. It is decorative — the accessible
+   * time is a real <time> element beside it.
+   */
+  .bubble-clock {
+    float: right;
+    margin-left: 0.5rem;
+    padding-top: 0.45em;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-muted);
+    user-select: none;
+  }
+
+  .day-chip {
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    box-shadow: var(--bubble-shadow);
+  }
+
+  .system-notice {
+    display: block;
+    width: fit-content;
+    border-radius: 0.5rem;
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    box-shadow: var(--bubble-shadow);
+  }
+
+  .sender-avatar {
+    background: hsl(var(--sender-hue) var(--sender-s-bg) var(--sender-l-bg));
+    color: hsl(var(--sender-hue) var(--sender-s-fg) var(--sender-l-fg));
+  }
+  .sender-name {
+    color: hsl(var(--sender-hue) var(--sender-s-name) var(--sender-l-name));
   }
   /* Long chats: let the browser skip work for off-screen days. */
   .day-section {

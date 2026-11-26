@@ -14,6 +14,7 @@ import {
   TextInput,
 } from '@/components/ui';
 import { useVault } from '@/components/VaultProvider';
+import { Avatar } from '@/components/Avatar';
 import { GlobalSearch } from '@/components/GlobalSearch';
 
 function relativeDay(localTs: string | null): string {
@@ -22,9 +23,16 @@ function relativeDay(localTs: string | null): string {
 }
 
 export default function ArchivePage() {
-  const { conversations, conversationsLoading, refreshConversations } = useVault();
+  const { api, conversations, conversationsLoading, refreshConversations } = useVault();
   const [filter, setFilter] = useState('');
   const [searching, setSearching] = useState(false);
+  const [replicating, setReplicating] = useState(false);
+  const [replicationNote, setReplicationNote] = useState<string | null>(null);
+
+  /* Stored on the primary but not yet verified on the second provider. */
+  const backingUp = conversations.filter(
+    (entry) => entry.summary.state === 'active' && !entry.summary.archiveVerified,
+  ).length;
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -86,14 +94,67 @@ export default function ArchivePage() {
 
       {conversations.some((entry) => entry.error) ? (
         <Notice tone="warn" title="Some conversations could not be read">
+          {/* Link each one, rather than printing an opaque id with no way to
+              act on it: the conversation page is where it can be removed or
+              re-imported. */}
           {conversations
             .filter((entry) => entry.error)
-            .slice(0, 3)
+            .slice(0, 5)
             .map((entry) => (
               <p key={entry.summary.id}>
-                {entry.summary.id}: {entry.error}
+                <Link href={`/app/c/${entry.summary.id}`} className="underline underline-offset-2">
+                  {entry.manifest?.title ?? 'Unreadable conversation'}
+                </Link>{' '}
+                — {entry.error}
               </p>
             ))}
+          <p className="mt-1">
+            Open one to remove it or import the export again. Nothing else in your archive is
+            affected.
+          </p>
+        </Notice>
+      ) : null}
+
+      {backingUp > 0 ? (
+        <Notice tone="warn" title={`${String(backingUp)} still backing up`}>
+          <p>
+            These are stored on the primary provider but not yet copied and checked on the second
+            one, so they do not count as a restorable archive yet.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              busy={replicating}
+              onClick={async () => {
+                setReplicating(true);
+                setReplicationNote(null);
+                try {
+                  /* The pass handles a bounded batch, so keep going until it
+                     stops finding work or stops making progress. */
+                  let processed = 0;
+                  for (let round = 0; round < 40; round += 1) {
+                    const result = await api.runReplication(200);
+                    processed += result.processed;
+                    if (result.processed === 0) break;
+                  }
+                  await refreshConversations();
+                  setReplicationNote(
+                    processed === 0
+                      ? 'Nothing left to copy. If something still shows as backing up, check it for a failed object.'
+                      : `Copied and verified ${String(processed)} objects.`,
+                  );
+                } catch (error) {
+                  setReplicationNote(
+                    error instanceof Error ? error.message : 'That did not finish.',
+                  );
+                } finally {
+                  setReplicating(false);
+                }
+              }}
+            >
+              Finish backing up
+            </Button>
+            {replicationNote ? <span className="muted text-xs">{replicationNote}</span> : null}
+          </div>
         </Notice>
       ) : null}
 
@@ -132,7 +193,8 @@ export default function ArchivePage() {
                   className="block space-y-2 p-4 hover:bg-ink-100/60 dark:hover:bg-ink-800/60"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <h2 className="font-medium leading-snug">
+                    <Avatar name={manifest?.title ?? '?'} size={38} className="mt-0.5" />
+                    <h2 className="min-w-0 flex-1 font-medium leading-snug">
                       {manifest?.title ?? 'Unreadable conversation'}
                     </h2>
                     {entry.summary.archiveVerified ? (
