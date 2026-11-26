@@ -29,7 +29,15 @@ export function enforceRateLimit(key: string, perMinute: number): void {
     return;
   }
   existing.count += 1;
-  if (existing.count > perMinute) throw rateLimited();
+  if (existing.count > perMinute) {
+    /*
+     * Tell the caller how long this window still has to run. A legitimate
+     * import is request-heavy by nature — it is the one thing this product
+     * exists to do — so the right answer to a client that is going too fast is
+     * "wait this long", not "give up".
+     */
+    throw rateLimited((existing.resetAtMs - now) / 1000);
+  }
 }
 
 export function resetRateLimitsForTests(): void {

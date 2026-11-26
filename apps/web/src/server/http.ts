@@ -17,6 +17,8 @@ export class HttpError extends Error {
     readonly code: ApiErrorCode,
     message: string,
     readonly details?: unknown,
+    /** Extra response headers, such as Retry-After on a 429. */
+    readonly headers?: Record<string, string>,
   ) {
     super(message);
     this.name = 'HttpError';
@@ -36,8 +38,26 @@ export const payloadTooLarge = (message: string) =>
   new HttpError(413, 'payload_too_large', message);
 export const quotaExceeded = (message: string, details?: unknown) =>
   new HttpError(402, 'quota_exceeded', message, details);
-export const rateLimited = (message = 'Too many requests. Try again shortly.') =>
-  new HttpError(429, 'rate_limited', message);
+/**
+ * A 429 that says *when* to come back.
+ *
+ * Without this the client is guessing, and a client that guesses short will
+ * burn its retries inside a window it cannot possibly escape — which is how a
+ * long import used to fail outright instead of simply taking longer.
+ */
+export const rateLimited = (
+  retryAfterSeconds: number,
+  message = 'Too many requests. Try again shortly.',
+) =>
+  new HttpError(
+    429,
+    'rate_limited',
+    message,
+    { retryAfterSeconds },
+    {
+      'retry-after': String(Math.max(1, Math.ceil(retryAfterSeconds))),
+    },
+  );
 export const notConfigured = (message: string) => new HttpError(501, 'not_configured', message);
 
 export function jsonResponse(data: unknown, init: ResponseInit = {}): Response {
@@ -85,7 +105,7 @@ export function errorResponse(error: unknown): Response {
           ...(error.details === undefined ? {} : { details: error.details }),
         },
       },
-      { status: error.status },
+      { status: error.status, headers: error.headers },
     );
   }
   log.error('Unhandled error in a route handler', { error });

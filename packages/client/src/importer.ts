@@ -54,7 +54,7 @@ import {
   type SkippedEntry,
 } from '@chatvault/parser';
 import type { ApiClient } from './api';
-import { PartBuffer, collectStream, streamToAsyncIterable, withRetry } from './bytes';
+import { PartBuffer, collectStream, isRateLimit, streamToAsyncIterable, withRetry } from './bytes';
 import { TaskPool } from './pool';
 
 /* ------------------------------------------------------------------ sources */
@@ -334,11 +334,20 @@ async function uploadEncrypted(options: {
   signal?: AbortSignal;
   onBytes?: (delta: number) => void;
 }): Promise<UploadedObject> {
-  const auth = await options.api.authorizeUpload({
-    importId: options.importId,
-    kind: options.kind,
-    expectedCiphertextBytes: options.estimatedCiphertextBytes,
-  });
+  /*
+   * Authorising reserves quota and opens an upload session, so it is not safe
+   * to repeat blindly — but a 429 is a request the server refused before it
+   * did anything, so waiting it out costs nothing and saves the import.
+   */
+  const auth = await withRetry(
+    () =>
+      options.api.authorizeUpload({
+        importId: options.importId,
+        kind: options.kind,
+        expectedCiphertextBytes: options.estimatedCiphertextBytes,
+      }),
+    { signal: options.signal, retryWhen: isRateLimit, attempts: 6 },
+  );
 
   const writer = await ObjectWriter.create({
     material: options.material,
@@ -377,12 +386,18 @@ async function uploadEncrypted(options: {
   for (const piece of pieces) buffer.push(piece);
   await drain(true);
 
-  await options.api.completeObject({
-    ticket: auth.ticket,
-    ciphertextBytes: stats.ciphertextBytes,
-    ciphertextSha256: stats.ciphertextSha256,
-    parts,
-  });
+  /* Completing is idempotent on the ticket, so any transient failure may be
+     retried, not only a rate limit. */
+  await withRetry(
+    () =>
+      options.api.completeObject({
+        ticket: auth.ticket,
+        ciphertextBytes: stats.ciphertextBytes,
+        ciphertextSha256: stats.ciphertextSha256,
+        parts,
+      }),
+    { signal: options.signal, attempts: 6 },
+  );
 
   return {
     objectId: auth.objectId,

@@ -159,6 +159,45 @@ describe('rate limiting', () => {
     process.env.RATE_LIMIT_AUTH_PER_MIN = '1000';
     await resetServerState();
   });
+
+  it('tells the caller how long to wait, instead of just saying no', async () => {
+    /*
+     * A 429 with no Retry-After leaves the client guessing, and a client that
+     * guesses short burns its attempts inside a window it cannot outlast. That
+     * is how a long import used to fail: not because it was too big, but
+     * because neither side knew how to wait.
+     */
+    process.env.RATE_LIMIT_AUTH_PER_MIN = '1';
+    await resetServerState();
+    const localFetch = createLocalFetch({});
+
+    let limited: Response | null = null;
+    for (let attempt = 0; attempt < 4 && limited === null; attempt += 1) {
+      const response = await localFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'nobody@example.test', password: 'wrong-password' }),
+      });
+      if (response.status === 429) limited = response;
+    }
+
+    expect(limited).not.toBeNull();
+    const header = limited?.headers.get('retry-after');
+    expect(header).not.toBeNull();
+    const seconds = Number(header);
+    // The window is a minute, and it has only just started.
+    expect(seconds).toBeGreaterThan(0);
+    expect(seconds).toBeLessThanOrEqual(60);
+
+    const body = (await limited?.json()) as {
+      error?: { code?: string; details?: { retryAfterSeconds?: number } };
+    };
+    expect(body.error?.code).toBe('rate_limited');
+    expect(body.error?.details?.retryAfterSeconds).toBeGreaterThan(0);
+
+    process.env.RATE_LIMIT_AUTH_PER_MIN = '1000';
+    await resetServerState();
+  });
 });
 
 describe('request bodies', () => {

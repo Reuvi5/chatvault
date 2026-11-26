@@ -217,7 +217,7 @@ function load(): Env {
     },
     rateLimits: {
       auth: number(process.env.RATE_LIMIT_AUTH_PER_MIN, 10),
-      upload: number(process.env.RATE_LIMIT_UPLOAD_PER_MIN, 600),
+      upload: number(process.env.RATE_LIMIT_UPLOAD_PER_MIN, 3000),
       read: number(process.env.RATE_LIMIT_READ_PER_MIN, 1200),
     },
   };

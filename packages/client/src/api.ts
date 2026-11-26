@@ -20,12 +20,22 @@ import type {
   ApiErrorCode,
 } from '@chatvault/protocol';
 
+/** Seconds from a response's Retry-After header, when it carries one. */
+function retryAfterFrom(response: Response): number | undefined {
+  const header = response.headers.get('retry-after');
+  if (header === null) return undefined;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+}
+
 export class ApiRequestError extends Error {
   constructor(
     readonly status: number,
     readonly code: ApiErrorCode | 'network' | 'unknown',
     message: string,
     readonly details?: unknown,
+    /** Seconds the server asked us to wait, from a 429's Retry-After. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'ApiRequestError';
@@ -109,6 +119,7 @@ export class ApiClient {
         envelope?.error?.code ?? 'unknown',
         envelope?.error?.message ?? `Request failed with status ${String(response.status)}`,
         envelope?.error?.details,
+        retryAfterFrom(response),
       );
     }
     return parsed as T;
@@ -210,6 +221,8 @@ export class ApiClient {
         response.status,
         'unknown',
         `Uploading part ${String(partNumber)} failed: ${text.slice(0, 200)}`,
+        undefined,
+        retryAfterFrom(response),
       );
     }
   }

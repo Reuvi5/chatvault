@@ -79,9 +79,48 @@ export interface RetryOptions {
   baseDelayMs?: number;
   signal?: AbortSignal;
   onRetry?: (attempt: number, error: unknown) => void;
+  /**
+   * Which failures are worth retrying. Defaults to anything not permanent.
+   * Operations that are not safe to repeat blindly — ones that reserve quota
+   * or create a record — pass `isRateLimit`, because a rejected request is one
+   * the server refused before it did anything.
+   */
+  retryWhen?: (error: unknown) => boolean;
 }
 
-/** Retry with exponential backoff. Every retried operation here is idempotent. */
+/** A rejection the server asked us to wait out, and nothing else. */
+export function isRateLimit(error: unknown): boolean {
+  return (error as { status?: number } | null)?.status === 429;
+}
+
+/**
+ * How long to wait before trying again.
+ *
+ * When the server tells us (a 429 carries Retry-After), believe it. Guessing
+ * short here is not a harmless optimisation: a rate-limit window runs for a
+ * fixed time, so a client that retries four times in three seconds exhausts
+ * its attempts inside a window it had no chance of outlasting, and an import
+ * that merely needed to slow down fails outright instead.
+ */
+function delayBeforeRetry(error: unknown, attempt: number, baseMs: number): number {
+  const asked = (error as { retryAfterSeconds?: number } | null)?.retryAfterSeconds;
+  if (typeof asked === 'number' && Number.isFinite(asked)) {
+    // A little past the window, with jitter, so a burst of parallel uploads
+    // does not all return at the same instant and trip it again.
+    return asked * 1000 + 250 + Math.random() * 750;
+  }
+  return baseMs * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5);
+}
+
+/** True for failures that waiting cannot fix, so there is no point retrying. */
+function isPermanent(error: unknown): boolean {
+  const status = (error as { status?: number } | null)?.status;
+  if (typeof status !== 'number') return false;
+  // 408 and 429 are worth waiting out; the rest of 4xx will not change.
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/** Retry with backoff. Every retried operation here is idempotent. */
 export async function withRetry<T>(
   operation: () => Promise<T>,
   options: RetryOptions = {},
@@ -95,10 +134,11 @@ export async function withRetry<T>(
       return await operation();
     } catch (error) {
       lastError = error;
-      if (attempt === attempts) break;
+      // Retrying a rejected passphrase or a missing object just wastes time.
+      const worthRetrying = options.retryWhen ?? ((candidate: unknown) => !isPermanent(candidate));
+      if (attempt === attempts || !worthRetrying(error)) break;
       options.onRetry?.(attempt, error);
-      const delay = base * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delayBeforeRetry(error, attempt, base)));
     }
   }
   throw lastError;
